@@ -1,6 +1,7 @@
 "use client";
 
 import React, { useState, useEffect } from "react";
+import Link from "next/link";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
@@ -49,7 +50,6 @@ export default function DashboardPage() {
   const { createModalOpen, setCreateModalOpen } = useDashboardLayout();
   const queryClient = useQueryClient();
 
-  const [activeFilter, setActiveFilter] = useState<"all" | "todo" | "in-progress" | "done">("all");
   const [editingTask, setEditingTask] = useState<Task | null>(null);
   const [deletingTaskId, setDeletingTaskId] = useState<string | null>(null);
   const [greeting, setGreeting] = useState("Welcome back");
@@ -145,7 +145,7 @@ export default function DashboardPage() {
     },
   });
 
-  // Quick Status Transition (Optimistic UI style updates)
+  // Quick Status Transition
   const handleQuickStatusChange = (task: Task, newStatus: "todo" | "in-progress" | "done") => {
     updateTaskMutation.mutate({
       id: task._id,
@@ -180,17 +180,17 @@ export default function DashboardPage() {
   
   const completionRate = totalCount > 0 ? Math.round((doneCount / totalCount) * 100) : 0;
 
-  // Filter logic
-  const filteredTasks = tasks.filter((t) => {
-    if (activeFilter === "all") return true;
-    return t.status === activeFilter;
-  });
+  // Filter tasks to show only pending ones (todo or in-progress) on dashboard summary
+  // Sorted by updatedAt descending and capped at top 5
+  const dashboardPendingTasks = tasks
+    .filter((t) => t.status === "todo" || t.status === "in-progress")
+    .sort((a, b) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime())
+    .slice(0, 5);
 
-  // Recent Activity logic (Computed dynamically based on tasks updatedAt timestamps)
+  // Recent Activity logic
   const getRecentActivities = () => {
     if (tasks.length === 0) return [];
     
-    // Sort tasks by updated date descending
     const sorted = [...tasks].sort(
       (a, b) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime()
     );
@@ -270,41 +270,32 @@ export default function DashboardPage() {
         })}
       </div>
 
-      {/* Main Grid: Lists vs Widgets */}
+      {/* Main Grid: Summary List vs Widgets */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         
-        {/* Left Side: Task Management List */}
+        {/* Left Side: Pending Tasks Overview */}
         <div className="lg:col-span-2 space-y-4">
           <div className="flex items-center justify-between border-b border-border-custom pb-2 select-none">
-            <h3 className="text-sm font-semibold text-foreground tracking-tight">
-              Tasks
-            </h3>
-            
-            {/* Grayscale Status Filter */}
-            <div className="flex bg-secondary-bg border border-border-custom p-0.5 rounded-md text-xs font-semibold text-secondary-text">
-              {(["all", "todo", "in-progress", "done"] as const).map((filter) => (
-                <button
-                  key={filter}
-                  onClick={() => setActiveFilter(filter)}
-                  className={`
-                    px-2.5 py-1.5 rounded transition uppercase leading-none
-                    ${activeFilter === filter 
-                      ? "bg-white border border-border-custom text-foreground shadow-sm font-bold" 
-                      : "hover:text-foreground hover:bg-hover-custom"
-                    }
-                  `}
-                >
-                  {filter}
-                </button>
-              ))}
+            <div className="flex items-center gap-2">
+              <Clock className="w-4 h-4 text-secondary-text" />
+              <h3 className="text-sm font-semibold text-foreground tracking-tight">
+                Pending Actions ({dashboardPendingTasks.length})
+              </h3>
             </div>
+            
+            <Link href="/dashboard/tasks">
+              <span className="text-xs font-bold text-secondary-text hover:text-foreground transition flex items-center gap-1 cursor-pointer">
+                <span>View Workspace</span>
+                <ChevronRight className="w-3.5 h-3.5" />
+              </span>
+            </Link>
           </div>
 
-          {/* Task Card List with animations */}
+          {/* Task list summary */}
           <div className="flex flex-col gap-3">
             <AnimatePresence mode="popLayout">
-              {filteredTasks.length > 0 ? (
-                filteredTasks.map((task) => (
+              {dashboardPendingTasks.length > 0 ? (
+                dashboardPendingTasks.map((task) => (
                   <motion.div
                     key={task._id}
                     layout
@@ -318,48 +309,31 @@ export default function DashboardPage() {
                       {/* Checkbox for quick completion */}
                       <button
                         onClick={() => 
-                          handleQuickStatusChange(task, task.status === "done" ? "todo" : "done")
+                          handleQuickStatusChange(task, "done")
                         }
-                        className="text-secondary-text hover:text-foreground shrink-0 mt-0.5 transition"
-                        aria-label={task.status === "done" ? "Mark todo" : "Mark completed"}
+                        className="text-secondary-text hover:text-foreground shrink-0 mt-0.5 transition cursor-pointer"
+                        aria-label="Mark completed"
                       >
-                        {task.status === "done" ? (
-                          <CheckCircle2 className="w-4.5 h-4.5 text-foreground" />
-                        ) : (
-                          <Circle className="w-4.5 h-4.5" />
-                        )}
+                        <Circle className="w-4.5 h-4.5" />
                       </button>
                       
                       <div className="min-w-0">
-                        <h4 className={`text-xs font-semibold tracking-tight text-foreground truncate ${task.status === "done" ? "line-through text-secondary-text" : ""}`}>
+                        <h4 className="text-xs font-semibold tracking-tight text-foreground truncate">
                           {task.title}
                         </h4>
-                        <p className={`text-xs text-secondary-text leading-normal mt-1 line-clamp-1 ${task.status === "done" ? "line-through" : ""}`}>
+                        <p className="text-xs text-secondary-text leading-normal mt-1 line-clamp-1">
                           {task.description}
                         </p>
                         <div className="flex items-center gap-2 mt-2 select-none">
-                          {/* Created Date */}
+                          <span className="text-[10px] text-secondary-text font-bold uppercase border border-border-custom bg-secondary-bg px-1.5 py-0.5 rounded leading-none shrink-0">
+                            {task.status}
+                          </span>
                           <span className="text-xs text-secondary-text font-medium">
-                            {new Date(task.createdAt).toLocaleDateString(undefined, {
+                            Updated {new Date(task.updatedAt).toLocaleDateString(undefined, {
                               month: "short",
                               day: "numeric",
                             })}
                           </span>
-                          
-                          <span className="text-xs text-secondary-text font-semibold">•</span>
-                          
-                          {/* Quick inline status dropdown */}
-                          <select
-                            value={task.status}
-                            onChange={(e) => 
-                              handleQuickStatusChange(task, e.target.value as any)
-                            }
-                            className="text-xs text-secondary-text font-bold bg-transparent outline-none cursor-pointer uppercase py-0 border-none hover:text-foreground transition"
-                          >
-                            <option value="todo">Todo</option>
-                            <option value="in-progress">In Progress</option>
-                            <option value="done">Done</option>
-                          </select>
                         </div>
                       </div>
                     </div>
@@ -368,14 +342,14 @@ export default function DashboardPage() {
                     <div className="flex items-center gap-1.5 shrink-0 opacity-0 group-hover:opacity-100 transition-opacity">
                       <button
                         onClick={() => setEditingTask(task)}
-                        className="text-secondary-text hover:text-foreground p-1 hover:bg-hover-custom rounded transition"
+                        className="text-secondary-text hover:text-foreground p-1 hover:bg-hover-custom rounded transition cursor-pointer"
                         aria-label="Edit task"
                       >
                         <Edit2 className="w-3.5 h-3.5" />
                       </button>
                       <button
                         onClick={() => setDeletingTaskId(task._id)}
-                        className="text-secondary-text hover:text-foreground p-1 hover:bg-hover-custom rounded transition"
+                        className="text-secondary-text hover:text-foreground p-1 hover:bg-hover-custom rounded transition cursor-pointer"
                         aria-label="Delete task"
                       >
                         <Trash2 className="w-3.5 h-3.5" />
@@ -385,17 +359,24 @@ export default function DashboardPage() {
                 ))
               ) : (
                 <EmptyState
-                  title="No tasks found"
-                  description={
-                    activeFilter === "all"
-                      ? "You haven't logged any tasks yet. Create one to get started!"
-                      : `You have no tasks matching status "${activeFilter}".`
-                  }
-                  actionText={activeFilter === "all" ? "Create Task" : undefined}
+                  title="All caught up!"
+                  description="You have no pending tasks. Enjoy your day or create a new one!"
+                  actionText="Create Task"
                   onAction={() => setCreateModalOpen(true)}
                 />
               )}
             </AnimatePresence>
+            
+            {dashboardPendingTasks.length > 0 && (
+              <div className="pt-2 text-center select-none">
+                <Link href="/dashboard/tasks">
+                  <span className="inline-flex items-center gap-1.5 text-xs font-bold text-secondary-text hover:text-foreground transition cursor-pointer">
+                    <span>Manage all {totalCount} tasks in Workspace</span>
+                    <ChevronRight className="w-3.5 h-3.5" />
+                  </span>
+                </Link>
+              </div>
+            )}
           </div>
         </div>
 

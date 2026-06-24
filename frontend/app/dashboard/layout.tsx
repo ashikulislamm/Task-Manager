@@ -91,7 +91,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
 
   const navItems = [
     { label: "Dashboard", href: "/dashboard", icon: LayoutDashboard },
-    { label: "My Tasks", href: "/dashboard", icon: CheckSquare }, // Shared page filterable
+    { label: "My Tasks", href: "/dashboard/tasks", icon: CheckSquare },
     { label: "Profile", href: "/dashboard/profile", icon: User },
     { label: "Settings", href: "/dashboard/settings", icon: Settings },
   ];
@@ -124,9 +124,9 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
           <nav className="flex-1 p-4 space-y-1">
             {navItems.map((item, idx) => {
               const Icon = item.icon;
-              // Check if path matches exactly (handling My Tasks vs Dashboard links)
-              // If layout path matches dashboard exactly, we highlight Dashboard/My Tasks depending on context
-              const isActive = pathname === item.href;
+              const isActive = item.href === "/dashboard"
+                ? pathname === "/dashboard"
+                : pathname.startsWith(item.href);
               
               return (
                 <Link key={idx} href={item.href}>
@@ -200,7 +200,9 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
                 <nav className="flex-1 space-y-1.5">
                   {navItems.map((item, idx) => {
                     const Icon = item.icon;
-                    const isActive = pathname === item.href;
+                    const isActive = item.href === "/dashboard"
+                      ? pathname === "/dashboard"
+                      : pathname.startsWith(item.href);
                     
                     return (
                       <Link key={idx} href={item.href}>

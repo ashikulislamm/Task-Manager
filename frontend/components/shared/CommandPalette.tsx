@@ -3,7 +3,7 @@
 import React, { useState, useEffect, useRef } from "react";
 import { useRouter } from "next/navigation";
 import { motion, AnimatePresence } from "framer-motion";
-import { Search, Plus, User, Settings, LayoutDashboard, LogOut, CornerDownLeft } from "lucide-react";
+import { Search, Plus, User, Settings, LayoutDashboard, LogOut, CornerDownLeft, CheckSquare } from "lucide-react";
 import { useAuth } from "../../context/AuthContext";
 
 interface CommandPaletteProps {
@@ -42,6 +42,16 @@ export const CommandPalette: React.FC<CommandPaletteProps> = ({
       icon: LayoutDashboard,
       perform: () => {
         router.push("/dashboard");
+        onClose();
+      },
+    },
+    {
+      id: "go-tasks",
+      title: "Go to My Tasks",
+      subtitle: "View, filter, and organize all tasks",
+      icon: CheckSquare,
+      perform: () => {
+        router.push("/dashboard/tasks");
         onClose();
       },
     },
