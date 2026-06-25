@@ -13,7 +13,8 @@ import {
   X, 
   Search, 
   Plus,
-  Command
+  Command,
+  Clock
 } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import { useAuth } from "../../context/AuthContext";
@@ -41,6 +42,7 @@ export const useDashboardLayout = () => {
 export default function DashboardLayout({ children }: { children: React.ReactNode }) {
   const { user, logout, loading } = useAuth();
   const pathname = usePathname();
+  const isFocusPage = pathname === "/dashboard/focus";
   const [mobileSidebarOpen, setMobileSidebarOpen] = useState(false);
   const [commandPaletteOpen, setCommandPaletteOpen] = useState(false);
   const [createModalOpen, setCreateModalOpen] = useState(false);
@@ -92,9 +94,29 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
   const navItems = [
     { label: "Dashboard", href: "/dashboard", icon: LayoutDashboard },
     { label: "My Tasks", href: "/dashboard/tasks", icon: CheckSquare },
+    { label: "Focus Space", href: "/dashboard/focus", icon: Clock },
     { label: "Profile", href: "/dashboard/profile", icon: User },
     { label: "Settings", href: "/dashboard/settings", icon: Settings },
   ];
+
+  if (isFocusPage) {
+    return (
+      <DashboardLayoutContext.Provider
+        value={{
+          openCreateModal: () => setCreateModalOpen(true),
+          triggerSearch: () => setCommandPaletteOpen(true),
+          createModalOpen,
+          setCreateModalOpen,
+        }}
+      >
+        <div className="min-h-screen flex bg-white text-foreground font-sans selection:bg-neutral-100 selection:text-foreground">
+          <main className="flex-1 overflow-y-auto p-6 md:p-8 bg-white max-w-5xl w-full mx-auto">
+            {children}
+          </main>
+        </div>
+      </DashboardLayoutContext.Provider>
+    );
+  }
 
   return (
     <DashboardLayoutContext.Provider

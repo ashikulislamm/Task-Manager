@@ -34,6 +34,18 @@ export const createTaskSchema = z.object({
       })
       .optional()
       .nullable(),
+    isRecurring: z.boolean().optional(),
+    recurrenceType: z.enum(['daily', 'weekly', 'monthly']).optional().nullable(),
+    recurrenceEndDate: z
+      .string()
+      .refine((val) => !isNaN(Date.parse(val)), {
+        message: 'Invalid end date format',
+      })
+      .optional()
+      .nullable(),
+  }).refine((data) => !data.isRecurring || !!data.recurrenceType, {
+    message: 'Recurrence type is required when task is recurring',
+    path: ['recurrenceType'],
   }),
 });
 
@@ -72,6 +84,18 @@ export const updateTaskSchema = z.object({
       })
       .optional()
       .nullable(),
+    isRecurring: z.boolean().optional(),
+    recurrenceType: z.enum(['daily', 'weekly', 'monthly']).optional().nullable(),
+    recurrenceEndDate: z
+      .string()
+      .refine((val) => !isNaN(Date.parse(val)), {
+        message: 'Invalid end date format',
+      })
+      .optional()
+      .nullable(),
+  }).refine((data) => !data.isRecurring || !!data.recurrenceType, {
+    message: 'Recurrence type is required when task is recurring',
+    path: ['recurrenceType'],
   }),
 });
 

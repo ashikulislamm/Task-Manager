@@ -18,12 +18,31 @@ import {
   TrendingUp,
   Calendar,
   AlertCircle,
-  Folder
+  Folder,
+  Play
 } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
+import {
+  AreaChart,
+  Area,
+  XAxis,
+  YAxis,
+  CartesianGrid,
+  Tooltip,
+  ResponsiveContainer,
+  BarChart,
+  Bar,
+  PieChart,
+  Pie,
+  Cell,
+  Legend
+} from "recharts";
 import { useAuth } from "../../context/AuthContext";
 import { useToast } from "../../components/shared/Toast";
 import { taskService, Task } from "../../services/task.service";
+import { analyticsService } from "../../services/analytics.service";
+import { activityService } from "../../services/activity.service";
+import { focusService } from "../../services/focus.service";
 import { useDashboardLayout } from "./layout";
 import { Button } from "../../components/shared/Button";
 import { Input } from "../../components/shared/Input";
@@ -31,6 +50,7 @@ import { Modal } from "../../components/shared/Modal";
 import { ConfirmDialog } from "../../components/shared/ConfirmDialog";
 import { EmptyState } from "../../components/shared/EmptyState";
 import { DashboardPageSkeleton } from "../../components/shared/Loader";
+import ActivityTimeline from "../../components/shared/ActivityTimeline";
 
 // Task Validation Schemas
 const taskSchema = z.object({
@@ -46,6 +66,9 @@ const taskSchema = z.object({
   priority: z.enum(["low", "medium", "high", "critical"]),
   dueDate: z.string().optional().nullable().or(z.literal("")),
   category: z.enum(["work", "personal", "study", "health"]),
+  isRecurring: z.boolean().optional(),
+  recurrenceType: z.enum(["daily", "weekly", "monthly"]).optional().nullable().or(z.literal("")),
+  recurrenceEndDate: z.string().optional().nullable().or(z.literal("")),
 });
 
 type TaskFormValues = z.infer<typeof taskSchema>;
@@ -56,13 +79,17 @@ export default function DashboardPage() {
   const { createModalOpen, setCreateModalOpen } = useDashboardLayout();
   const queryClient = useQueryClient();
 
+  // Local UI States
   const [editingTask, setEditingTask] = useState<Task | null>(null);
   const [deletingTaskId, setDeletingTaskId] = useState<string | null>(null);
   const [greeting, setGreeting] = useState("Welcome back");
   const [dashboardCategoryFilter, setDashboardCategoryFilter] = useState<"all" | "work" | "personal" | "study" | "health">("all");
+  const [dashboardTab, setDashboardTab] = useState<"overview" | "analytics">("overview");
+  const [isMounted, setIsMounted] = useState<boolean>(false);
 
-  // Determine welcome greeting based on local time
+  // Set greeting and client mount status
   useEffect(() => {
+    setIsMounted(true);
     const hrs = new Date().getHours();
     if (hrs < 12) setGreeting("Good morning");
     else if (hrs < 18) setGreeting("Good afternoon");
@@ -74,6 +101,7 @@ export default function DashboardPage() {
     register: registerCreate,
     handleSubmit: handleCreateSubmit,
     reset: resetCreateForm,
+    watch: watchCreate,
     formState: { errors: createErrors },
   } = useForm<TaskFormValues>({
     resolver: zodResolver(taskSchema),
@@ -84,6 +112,9 @@ export default function DashboardPage() {
       priority: "medium",
       category: "personal",
       dueDate: "",
+      isRecurring: false,
+      recurrenceType: "daily",
+      recurrenceEndDate: "",
     },
   });
 
@@ -91,10 +122,14 @@ export default function DashboardPage() {
     register: registerEdit,
     handleSubmit: handleEditSubmit,
     setValue: setEditValue,
+    watch: watchEdit,
     formState: { errors: editErrors },
   } = useForm<TaskFormValues>({
     resolver: zodResolver(taskSchema),
   });
+
+  const isRecurringCreate = watchCreate("isRecurring");
+  const isRecurringEdit = watchEdit("isRecurring");
 
   // Load editing task data into edit form fields
   useEffect(() => {
@@ -105,11 +140,14 @@ export default function DashboardPage() {
       setEditValue("priority", editingTask.priority || "medium");
       setEditValue("category", editingTask.category || "personal");
       setEditValue("dueDate", editingTask.dueDate ? editingTask.dueDate.split("T")[0] : "");
+      setEditValue("isRecurring", editingTask.isRecurring || false);
+      setEditValue("recurrenceType", editingTask.recurrenceType || "daily");
+      setEditValue("recurrenceEndDate", editingTask.recurrenceEndDate ? editingTask.recurrenceEndDate.split("T")[0] : "");
     }
   }, [editingTask, setEditValue]);
 
   // React Query: Get User Tasks
-  const { data: response, isLoading } = useQuery({
+  const { data: response, isLoading: isTasksLoading } = useQuery({
     queryKey: ["tasks"],
     queryFn: async () => {
       const res = await taskService.getTasks();
@@ -117,13 +155,43 @@ export default function DashboardPage() {
     },
   });
 
+  // React Query: Get Productivity Analytics Overview
+  const { data: analytics, isLoading: isAnalyticsLoading } = useQuery({
+    queryKey: ["analytics"],
+    queryFn: async () => {
+      const res = await analyticsService.getOverview();
+      return res.data;
+    },
+  });
+
+  // React Query: Get Activities Timeline
+  const { data: activityResponse, isLoading: isActivitiesLoading } = useQuery({
+    queryKey: ["activities", 1],
+    queryFn: async () => {
+      const res = await activityService.getActivities({ page: 1, limit: 12 });
+      return res.data;
+    },
+  });
+
+  // React Query: Get Current Active Focus Session
+  const { data: activeFocus } = useQuery({
+    queryKey: ["currentFocus"],
+    queryFn: async () => {
+      const res = await focusService.getCurrentSession();
+      return res.data;
+    },
+  });
+
   const tasks = response || [];
+  const activities = activityResponse?.activities || [];
 
   // Mutations
   const createTaskMutation = useMutation({
     mutationFn: taskService.createTask,
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["tasks"] });
+      queryClient.invalidateQueries({ queryKey: ["analytics"] });
+      queryClient.invalidateQueries({ queryKey: ["activities"] });
       success("Task created successfully!");
       setCreateModalOpen(false);
       resetCreateForm();
@@ -138,6 +206,8 @@ export default function DashboardPage() {
       taskService.updateTask(id, data),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["tasks"] });
+      queryClient.invalidateQueries({ queryKey: ["analytics"] });
+      queryClient.invalidateQueries({ queryKey: ["activities"] });
       success("Task updated successfully!");
       setEditingTask(null);
     },
@@ -150,6 +220,8 @@ export default function DashboardPage() {
     mutationFn: taskService.deleteTask,
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["tasks"] });
+      queryClient.invalidateQueries({ queryKey: ["analytics"] });
+      queryClient.invalidateQueries({ queryKey: ["activities"] });
       success("Task deleted successfully!");
       setDeletingTaskId(null);
     },
@@ -170,6 +242,7 @@ export default function DashboardPage() {
     const formattedData = {
       ...data,
       dueDate: data.dueDate ? new Date(data.dueDate).toISOString() : null,
+      recurrenceEndDate: data.recurrenceEndDate ? new Date(data.recurrenceEndDate).toISOString() : null,
     };
     createTaskMutation.mutate(formattedData);
   };
@@ -179,6 +252,8 @@ export default function DashboardPage() {
       const formattedData = {
         ...data,
         dueDate: data.dueDate ? new Date(data.dueDate).toISOString() : null,
+        recurrenceEndDate: data.recurrenceEndDate ? new Date(data.recurrenceEndDate).toISOString() : null,
+        recurrenceType: data.recurrenceType === "" ? null : data.recurrenceType,
       };
       updateTaskMutation.mutate({
         id: editingTask._id,
@@ -201,86 +276,39 @@ export default function DashboardPage() {
     return new Date(task.dueDate) < today;
   };
 
-  // Stat computations
-  const totalCount = tasks.length;
-  const completedCount = tasks.filter((t) => t.status === "done").length;
-  const todoCount = tasks.filter((t) => t.status === "todo").length;
-  const inProgressCount = tasks.filter((t) => t.status === "in-progress").length;
-  
-  // Overdue logic
-  const overdueCount = tasks.filter((t) => isTaskOverdue(t)).length;
-
-  // Due Today logic
-  const dueTodayCount = tasks.filter((t) => {
-    const todayStr = new Date().toISOString().split("T")[0];
-    return t.dueDate && t.dueDate.split("T")[0] === todayStr;
-  }).length;
-
-  // Upcoming logic
-  const upcomingCount = tasks.filter((t) => {
-    const todayEnd = new Date();
-    todayEnd.setHours(23, 59, 59, 999);
-    return t.dueDate && new Date(t.dueDate) > todayEnd && t.status !== "done";
-  }).length;
-
-  // Category counts
-  const categoryStats = {
-    work: tasks.filter((t) => t.category === "work").length,
-    personal: tasks.filter((t) => t.category === "personal").length,
-    study: tasks.filter((t) => t.category === "study").length,
-    health: tasks.filter((t) => t.category === "health").length,
-  };
-
-  const completionRate = totalCount > 0 ? Math.round((completedCount / totalCount) * 100) : 0;
-
-  // Filter tasks to show only pending ones (todo or in-progress) on dashboard summary
-  // Also filter by selected category
+  // Pending tasks filter
   const dashboardPendingTasks = tasks
     .filter((t) => t.status === "todo" || t.status === "in-progress")
     .filter((t) => dashboardCategoryFilter === "all" || t.category === dashboardCategoryFilter)
     .sort((a, b) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime())
     .slice(0, 5);
 
-  // Next 5 upcoming deadlines, sorted by nearest due date ascending (excluding completed tasks and tasks without a due date)
+  // Next 5 upcoming deadlines
   const upcomingDeadlines = tasks
     .filter((t) => t.dueDate && t.status !== "done")
     .sort((a, b) => new Date(a.dueDate!).getTime() - new Date(b.dueDate!).getTime())
     .slice(0, 5);
 
-  // Recent Activity logic
-  const getRecentActivities = () => {
-    if (tasks.length === 0) return [];
-    
-    const sorted = [...tasks].sort(
-      (a, b) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime()
-    );
-
-    return sorted.slice(0, 4).map((task) => {
-      const isNew = task.createdAt === task.updatedAt;
-      const dateStr = new Date(task.updatedAt).toLocaleString(undefined, {
-        month: "short",
-        day: "numeric",
-        hour: "2-digit",
-        minute: "2-digit"
-      });
-
-      return {
-        id: task._id,
-        title: task.title,
-        status: task.status,
-        date: dateStr,
-        description: isNew 
-          ? `Created task: "${task.title}"` 
-          : `Moved task "${task.title}" to status "${task.status}"`
-      };
-    });
-  };
-
-  const recentActivities = getRecentActivities();
-
-  if (isLoading) {
+  if (isTasksLoading || isAnalyticsLoading) {
     return <DashboardPageSkeleton />;
   }
+
+  // Distribution chart data formatting
+  const statusData = analytics ? [
+    { name: "Todo", value: analytics.statusDistribution.todo },
+    { name: "In Progress", value: analytics.statusDistribution.inProgress },
+    { name: "Done", value: analytics.statusDistribution.done },
+  ] : [];
+
+  const priorityData = analytics ? [
+    { name: "Critical", count: analytics.priorityDistribution.critical },
+    { name: "High", count: analytics.priorityDistribution.high },
+    { name: "Medium", count: analytics.priorityDistribution.medium },
+    { name: "Low", count: analytics.priorityDistribution.low },
+  ] : [];
+
+  // Theme constants
+  const COLORS = ["#e5e5e5", "#666666", "#111111"]; // Grayscale palette
 
   return (
     <div className="space-y-6">
@@ -294,20 +322,43 @@ export default function DashboardPage() {
             Here is your productivity brief for today.
           </p>
         </div>
-        <Button variant="primary" size="sm" onClick={() => setCreateModalOpen(true)}>
-          <Plus className="w-4 h-4 mr-1.5" />
-          <span>New Task</span>
-        </Button>
+        <div className="flex gap-2">
+          <Link href="/dashboard/focus">
+            <Button variant="outline" size="sm">
+              <Clock className="w-4 h-4 mr-1.5" />
+              <span>Pomodoro</span>
+            </Button>
+          </Link>
+          <Button variant="primary" size="sm" onClick={() => setCreateModalOpen(true)}>
+            <Plus className="w-4 h-4 mr-1.5" />
+            <span>New Task</span>
+          </Button>
+        </div>
       </div>
 
+      {/* Active Focus Session Widget Banner */}
+      {activeFocus && (
+        <div className="p-4 border border-neutral-900 bg-neutral-900 text-white rounded-lg shadow-sm flex flex-col sm:flex-row sm:items-center justify-between gap-4 select-none">
+          <div className="space-y-1 text-left">
+            <span className="text-[9px] font-bold text-neutral-400 uppercase tracking-widest block leading-none">FOCUS MODE ACTIVE</span>
+            <h3 className="text-xs font-bold truncate leading-tight">Currently focusing on: "{activeFocus.taskId.title}"</h3>
+            <p className="text-[10px] text-neutral-300 leading-none">Your timer session is still active. Return to prevent cancellation.</p>
+          </div>
+          <Link href="/dashboard/focus" className="shrink-0">
+            <Button variant="outline" size="sm" className="bg-white text-neutral-900 border-none font-bold hover:bg-neutral-100 py-1.5">
+              Resume Focus Session
+            </Button>
+          </Link>
+        </div>
+      )}
+
       {/* Grid of Stat Cards */}
-      <div className="grid grid-cols-2 lg:grid-cols-5 gap-4 select-none">
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 select-none">
         {[
-          { label: "Total Tasks", val: totalCount, icon: CheckSquare, desc: "Aggregate tasks logged" },
-          { label: "Due Today", val: dueTodayCount, icon: Calendar, desc: "Deadlines finishing today" },
-          { label: "Upcoming", val: upcomingCount, icon: Clock, desc: "Future active deadlines" },
-          { label: "Overdue", val: overdueCount, icon: AlertCircle, desc: "Overdue tasks pending", warn: overdueCount > 0 },
-          { label: "Completed", val: completedCount, icon: CheckCircle2, desc: "Successfully completed" },
+          { label: "Total Tasks", val: analytics?.totalTasks || 0, icon: CheckSquare, desc: "Aggregate logged tasks" },
+          { label: "Completion Rate", val: `${analytics?.completionRate || 0}%`, icon: TrendingUp, desc: "Completed vs total logged" },
+          { label: "Overdue Tasks", val: analytics?.overdueTasks || 0, icon: AlertCircle, desc: "Overdue pending tasks", warn: (analytics?.overdueTasks || 0) > 0 },
+          { label: "Focus Hours", val: `${analytics?.focus.hoursThisWeek || 0}h`, icon: Clock, desc: `${analytics?.focus.sessionsCompleted || 0} focus sessions completed` },
         ].map((card, idx) => {
           const Icon = card.icon;
           return (
@@ -331,317 +382,380 @@ export default function DashboardPage() {
         })}
       </div>
 
-      {/* Main Grid: Summary List vs Widgets */}
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        
-        {/* Left Side: Pending Tasks Overview */}
-        <div className="lg:col-span-2 space-y-4">
-          <div className="flex flex-col sm:flex-row sm:items-center justify-between border-b border-border-custom pb-2 gap-2 select-none">
-            <div className="flex items-center gap-2">
-              <Clock className="w-4 h-4 text-secondary-text" />
-              <h3 className="text-sm font-semibold text-foreground tracking-tight">
-                Pending Actions ({dashboardPendingTasks.length})
-              </h3>
-            </div>
-            
-            {/* Category Filter Pills */}
-            <div className="flex items-center gap-1 overflow-x-auto max-w-full pb-1 sm:pb-0">
-              {[
-                { id: "all", label: "All" },
-                { id: "work", label: "Work" },
-                { id: "personal", label: "Personal" },
-                { id: "study", label: "Study" },
-                { id: "health", label: "Health" }
-              ].map((pill) => (
-                <button
-                  key={pill.id}
-                  onClick={() => setDashboardCategoryFilter(pill.id as any)}
-                  className={`
-                    px-2.5 py-0.5 rounded-full text-[9px] uppercase tracking-tight font-bold border transition
-                    ${dashboardCategoryFilter === pill.id 
-                      ? "bg-foreground text-white border-foreground" 
-                      : "bg-secondary-bg text-secondary-text border-border-custom hover:text-foreground"
-                    }
-                  `}
-                >
-                  {pill.label}
-                </button>
-              ))}
-            </div>
-          </div>
+      {/* Dashboard Section Switcher tabs */}
+      <div className="flex bg-neutral-100 p-0.5 rounded-lg text-xs font-semibold text-secondary-text w-full sm:w-auto overflow-x-auto select-none border border-border-custom">
+        {[
+          { id: "overview", label: "Workspace Overview" },
+          { id: "analytics", label: "Productivity Insights" }
+        ].map((tab) => (
+          <button
+            key={tab.id}
+            onClick={() => setDashboardTab(tab.id as any)}
+            className={`
+              px-4 py-2 rounded-md transition uppercase leading-none text-[10px] tracking-wider whitespace-nowrap shrink-0 cursor-pointer
+              ${dashboardTab === tab.id 
+                ? "bg-white border border-border-custom text-foreground shadow-xs font-bold" 
+                : "hover:text-foreground hover:bg-hover-custom/50"
+              }
+            `}
+          >
+            {tab.label}
+          </button>
+        ))}
+      </div>
 
-          {/* Task list summary */}
-          <div className="flex flex-col gap-3">
-            <AnimatePresence mode="popLayout">
-              {dashboardPendingTasks.length > 0 ? (
-                dashboardPendingTasks.map((task) => {
-                  const overdue = isTaskOverdue(task);
-                  return (
-                    <motion.div
-                      key={task._id}
-                      layout
-                      initial={{ opacity: 0, y: 10 }}
-                      animate={{ opacity: 1, y: 0 }}
-                      exit={{ opacity: 0, scale: 0.95 }}
-                      transition={{ duration: 0.2 }}
-                      className="p-4 bg-white border border-border-custom rounded-lg shadow-xs hover:border-foreground/45 transition flex items-center justify-between gap-4 group"
+      {/* Tab Contents: Overview vs Analytics */}
+      <AnimatePresence mode="wait">
+        {dashboardTab === "overview" ? (
+          <motion.div
+            key="overview"
+            initial={{ opacity: 0, y: 5 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: -5 }}
+            transition={{ duration: 0.15 }}
+            className="grid grid-cols-1 lg:grid-cols-3 gap-6"
+          >
+            {/* Left Column: Pending Tasks List */}
+            <div className="lg:col-span-2 space-y-4">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between border-b border-border-custom pb-2 gap-2 select-none">
+                <div className="flex items-center gap-2">
+                  <Clock className="w-4 h-4 text-secondary-text" />
+                  <h3 className="text-sm font-semibold text-foreground tracking-tight">
+                    Pending Actions ({dashboardPendingTasks.length})
+                  </h3>
+                </div>
+                
+                {/* Category Filter Pills */}
+                <div className="flex bg-neutral-100 border border-border-custom p-0.5 rounded-md text-lg font-semibold text-secondary-text w-full sm:w-auto overflow-x-auto">
+                  {[
+                    { id: "all", label: "All" },
+                    { id: "work", label: "Work" },
+                    { id: "personal", label: "Personal" },
+                    { id: "study", label: "Study" },
+                    { id: "health", label: "Health" }
+                  ].map((pill) => (
+                    <button
+                      key={pill.id}
+                      onClick={() => setDashboardCategoryFilter(pill.id as any)}
+                      className={`
+                        px-3 py-1 rounded transition uppercase leading-none text-[11px] tracking-tight whitespace-nowrap shrink-0 cursor-pointer
+                        ${dashboardCategoryFilter === pill.id 
+                          ? "bg-white border border-border-custom text-foreground shadow-xs font-bold" 
+                          : "hover:text-foreground hover:bg-hover-custom"
+                        }
+                      `}
                     >
-                      <div className="flex items-start gap-3 min-w-0 text-left">
-                        {/* Checkbox for quick completion */}
-                        <button
-                          onClick={() => 
-                            handleQuickStatusChange(task, "done")
-                          }
-                          className="text-secondary-text hover:text-foreground shrink-0 mt-0.5 transition cursor-pointer"
-                          aria-label="Mark completed"
+                      {pill.label}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              {/* Task list summary */}
+              <div className="flex flex-col gap-3">
+                <AnimatePresence mode="popLayout">
+                  {dashboardPendingTasks.length > 0 ? (
+                    dashboardPendingTasks.map((task) => {
+                      const overdue = isTaskOverdue(task);
+                      return (
+                        <motion.div
+                          key={task._id}
+                          layout
+                          initial={{ opacity: 0, y: 10 }}
+                          animate={{ opacity: 1, y: 0 }}
+                          exit={{ opacity: 0, scale: 0.95 }}
+                          transition={{ duration: 0.2 }}
+                          className="p-4 bg-white border border-border-custom rounded-lg shadow-xs hover:border-foreground/45 transition flex items-center justify-between gap-4 group"
                         >
-                          <Circle className="w-4.5 h-4.5" />
-                        </button>
-                        
-                        <div className="min-w-0">
-                          <div className="flex items-center gap-1.5 flex-wrap">
-                            <h4 className="text-xs font-bold tracking-tight text-foreground truncate">
-                              {task.title}
-                            </h4>
-                            <span className="text-[9px] text-secondary-text font-bold uppercase">
-                              [{task.category}]
-                            </span>
-                            {overdue && (
-                              <span className="inline-flex items-center gap-0.5 border border-neutral-400 bg-neutral-100 text-neutral-900 px-1 py-0.5 rounded text-[8px] font-extrabold uppercase animate-pulse">
-                                <span>Overdue</span>
-                              </span>
-                            )}
+                          <div className="flex items-start gap-3 min-w-0 text-left">
+                            <button
+                              onClick={() => handleQuickStatusChange(task, "done")}
+                              className="text-secondary-text hover:text-foreground shrink-0 mt-0.5 transition cursor-pointer"
+                              aria-label="Mark completed"
+                            >
+                              <Circle className="w-4.5 h-4.5" />
+                            </button>
+                            
+                            <div className="min-w-0">
+                              <div className="flex items-center gap-1.5 flex-wrap">
+                                <h4 className="text-xs font-bold tracking-tight text-foreground truncate">
+                                  {task.title}
+                                </h4>
+                                <span className="text-[9px] text-secondary-text font-bold uppercase">
+                                  [{task.category}]
+                                </span>
+                                {task.isRecurring && (
+                                  <span className="inline-flex items-center gap-0.5 border border-neutral-350 bg-neutral-100 text-neutral-850 px-1 py-0.5 rounded text-[8px] font-extrabold uppercase">
+                                    <span>Repeats {task.recurrenceType}</span>
+                                  </span>
+                                )}
+                                {overdue && (
+                                  <span className="inline-flex items-center gap-0.5 border border-neutral-400 bg-neutral-100 text-neutral-900 px-1 py-0.5 rounded text-[8px] font-extrabold uppercase animate-pulse">
+                                    <span>Overdue</span>
+                                  </span>
+                                )}
+                              </div>
+                              <p className="text-xs text-secondary-text leading-normal mt-1 line-clamp-1">
+                                {task.description}
+                              </p>
+                              <div className="flex items-center gap-2 mt-2.5 select-none text-[10px]">
+                                <span className="text-[9px] text-secondary-text font-bold uppercase border border-border-custom bg-secondary-bg px-1.5 py-0.5 rounded leading-none shrink-0">
+                                  {task.status}
+                                </span>
+                                {task.dueDate && (
+                                  <span className={`text-[10px] font-semibold leading-none shrink-0 ${overdue ? "text-neutral-900 font-bold" : "text-secondary-text"}`}>
+                                    Due: {new Date(task.dueDate).toLocaleDateString(undefined, { month: "short", day: "numeric" })}
+                                  </span>
+                                )}
+                              </div>
+                            </div>
                           </div>
-                          <p className="text-xs text-secondary-text leading-normal mt-1 line-clamp-1">
-                            {task.description}
-                          </p>
-                          <div className="flex items-center gap-2 mt-2.5 select-none text-[10px]">
-                            <span className="text-[9px] text-secondary-text font-bold uppercase border border-border-custom bg-secondary-bg px-1.5 py-0.5 rounded leading-none shrink-0">
-                              {task.status}
+
+                          <div className="flex items-center gap-1.5 shrink-0 opacity-0 group-hover:opacity-100 transition-opacity">
+                            <button
+                              onClick={() => setEditingTask(task)}
+                              className="text-secondary-text hover:text-foreground p-1 hover:bg-hover-custom rounded transition cursor-pointer"
+                              aria-label="Edit task"
+                            >
+                              <Edit2 className="w-3.5 h-3.5" />
+                            </button>
+                            <button
+                              onClick={() => setDeletingTaskId(task._id)}
+                              className="text-secondary-text hover:text-foreground p-1 hover:bg-hover-custom rounded transition cursor-pointer"
+                              aria-label="Delete task"
+                            >
+                              <Trash2 className="w-3.5 h-3.5" />
+                            </button>
+                          </div>
+                        </motion.div>
+                      );
+                    })
+                  ) : (
+                    <EmptyState
+                      title="No pending tasks"
+                      description={
+                        dashboardCategoryFilter !== "all"
+                          ? `No tasks found under category "${dashboardCategoryFilter}".`
+                          : "You have no pending tasks. Enjoy your day or create a new one!"
+                      }
+                      actionText={dashboardCategoryFilter === "all" ? "Create Task" : undefined}
+                      onAction={() => setCreateModalOpen(true)}
+                    />
+                  )}
+                </AnimatePresence>
+                
+                {tasks.length > 0 && (
+                  <div className="pt-2 text-center select-none">
+                    <Link href="/dashboard/tasks">
+                      <span className="inline-flex items-center gap-1.5 text-xs font-bold text-secondary-text hover:text-foreground transition cursor-pointer">
+                        <span>Manage all {tasks.length} tasks in Workspace</span>
+                        <ChevronRight className="w-3.5 h-3.5" />
+                      </span>
+                    </Link>
+                  </div>
+                )}
+              </div>
+            </div>
+
+            {/* Right Column: Deadlines & Activity Timeline */}
+            <div className="space-y-6 select-none text-left">
+              {/* Upcoming Deadlines Widget */}
+              <div className="p-5 border border-border-custom rounded-lg bg-white shadow-sm space-y-4">
+                <h3 className="text-xs font-bold text-foreground tracking-tight uppercase border-b border-border-custom pb-2 flex items-center gap-1.5">
+                  <Calendar className="w-4 h-4 text-secondary-text" />
+                  <span>Upcoming Deadlines</span>
+                </h3>
+
+                {upcomingDeadlines.length > 0 ? (
+                  <div className="flex flex-col gap-2">
+                    {upcomingDeadlines.map((task) => {
+                      const overdue = isTaskOverdue(task);
+                      return (
+                        <div key={task._id} className="p-2.5 border border-border-custom rounded-md bg-secondary-bg space-y-1.5">
+                          <div className="flex justify-between items-start gap-2">
+                            <span className="text-xs font-semibold text-foreground truncate">{task.title}</span>
+                            <span className={`text-[9px] uppercase font-bold shrink-0 px-1.5 py-0.5 border rounded ${overdue ? "border-neutral-400 bg-neutral-200 text-neutral-900" : "border-border-custom bg-white text-secondary-text"}`}>
+                              {overdue ? "Overdue" : "Pending"}
                             </span>
-                            {task.dueDate && (
-                              <span className={`text-[10px] font-semibold leading-none shrink-0 ${overdue ? "text-neutral-900 font-bold" : "text-secondary-text"}`}>
-                                Due: {new Date(task.dueDate).toLocaleDateString(undefined, { month: "short", day: "numeric" })}
-                              </span>
-                            )}
+                          </div>
+                          <div className="flex justify-between text-[10px] text-secondary-text">
+                            <span>{task.category}</span>
+                            <span className="font-semibold">{new Date(task.dueDate!).toLocaleDateString(undefined, { month: "short", day: "numeric" })}</span>
                           </div>
                         </div>
-                      </div>
+                      );
+                    })}
+                  </div>
+                ) : (
+                  <p className="text-xs text-secondary-text text-center py-2">
+                    No upcoming deadlines.
+                  </p>
+                )}
+              </div>
 
-                      {/* Actions panel */}
-                      <div className="flex items-center gap-1.5 shrink-0 opacity-0 group-hover:opacity-100 transition-opacity">
-                        <button
-                          onClick={() => setEditingTask(task)}
-                          className="text-secondary-text hover:text-foreground p-1 hover:bg-hover-custom rounded transition cursor-pointer"
-                          aria-label="Edit task"
+              {/* Activity Timeline Widget */}
+              <div className="p-5 border border-border-custom rounded-lg bg-white shadow-sm space-y-4">
+                <h3 className="text-xs font-bold text-foreground tracking-tight uppercase border-b border-border-custom pb-2 flex items-center gap-1.5">
+                  <TrendingUp className="w-4 h-4 text-secondary-text" />
+                  <span>Recent Activity</span>
+                </h3>
+                <ActivityTimeline activities={activities} />
+              </div>
+            </div>
+          </motion.div>
+        ) : (
+          <motion.div
+            key="analytics"
+            initial={{ opacity: 0, y: 5 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: -5 }}
+            transition={{ duration: 0.15 }}
+            className="space-y-6"
+          >
+            {/* Summary Cards */}
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 select-none">
+              {/* Weekly Performance Widget */}
+              <div className="p-5 border border-border-custom rounded-lg bg-white shadow-sm flex flex-col justify-between text-left min-h-[120px]">
+                <div>
+                  <span className="text-[10px] font-bold text-secondary-text uppercase tracking-wider block">WEEKLY PROGRESS SUMMARY</span>
+                  <div className="flex items-baseline gap-2 mt-2">
+                    <span className="text-3xl font-extrabold text-foreground">{analytics?.weekly.completed || 0}</span>
+                    <span className="text-xs text-secondary-text font-medium">completed / {analytics?.weekly.created || 0} created</span>
+                  </div>
+                </div>
+                <p className="text-[10px] text-secondary-text leading-tight mt-3">Tasks compiled during current calendar week.</p>
+              </div>
+
+              {/* Monthly Performance Widget */}
+              <div className="p-5 border border-border-custom rounded-lg bg-white shadow-sm flex flex-col justify-between text-left min-h-[120px]">
+                <div>
+                  <span className="text-[10px] font-bold text-secondary-text uppercase tracking-wider block">MONTHLY PROGRESS SUMMARY</span>
+                  <div className="flex items-baseline gap-2 mt-2">
+                    <span className="text-3xl font-extrabold text-foreground">{analytics?.monthly.completed || 0}</span>
+                    <span className="text-xs text-secondary-text font-medium">completed / {analytics?.monthly.created || 0} created</span>
+                  </div>
+                </div>
+                <p className="text-[10px] text-secondary-text leading-tight mt-3">Tasks compiled during current calendar month.</p>
+              </div>
+            </div>
+
+            {/* Charts Grid */}
+            {isMounted && (
+              <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 select-none">
+                {/* 7 Days Trend Chart */}
+                <div className="p-5 border border-border-custom rounded-lg bg-white shadow-sm space-y-4 text-left">
+                  <h4 className="text-xs font-bold text-foreground tracking-tight uppercase border-b border-border-custom pb-2">
+                    Weekly Productivity Trend (Last 7 Days)
+                  </h4>
+                  <div className="h-64 w-full">
+                    <ResponsiveContainer width="100%" height="100%">
+                      <AreaChart data={analytics?.weeklyTrend || []} margin={{ top: 10, right: 10, left: -25, bottom: 0 }}>
+                        <defs>
+                          <linearGradient id="colorCreated" x1="0" y1="0" x2="0" y2="1">
+                            <stop offset="5%" stopColor="#666666" stopOpacity={0.1}/>
+                            <stop offset="95%" stopColor="#666666" stopOpacity={0}/>
+                          </linearGradient>
+                          <linearGradient id="colorCompleted" x1="0" y1="0" x2="0" y2="1">
+                            <stop offset="5%" stopColor="#111111" stopOpacity={0.2}/>
+                            <stop offset="95%" stopColor="#111111" stopOpacity={0}/>
+                          </linearGradient>
+                        </defs>
+                        <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f0f0f0" />
+                        <XAxis dataKey="date" tickLine={false} axisLine={false} style={{ fontSize: 10, fill: "#666" }} />
+                        <YAxis tickLine={false} axisLine={false} style={{ fontSize: 10, fill: "#666" }} />
+                        <Tooltip contentStyle={{ fontSize: 11, borderRadius: 8, borderColor: "#e5e5e5" }} />
+                        <Legend wrapperStyle={{ fontSize: 10, paddingTop: 10 }} />
+                        <Area type="monotone" name="Created Tasks" dataKey="created" stroke="#666666" strokeWidth={2} fillOpacity={1} fill="url(#colorCreated)" />
+                        <Area type="monotone" name="Completed Tasks" dataKey="completed" stroke="#111111" strokeWidth={2} fillOpacity={1} fill="url(#colorCompleted)" />
+                      </AreaChart>
+                    </ResponsiveContainer>
+                  </div>
+                </div>
+
+                {/* 30 Days Trend Chart */}
+                <div className="p-5 border border-border-custom rounded-lg bg-white shadow-sm space-y-4 text-left">
+                  <h4 className="text-xs font-bold text-foreground tracking-tight uppercase border-b border-border-custom pb-2">
+                    Monthly Productivity Trend (Last 30 Days)
+                  </h4>
+                  <div className="h-64 w-full">
+                    <ResponsiveContainer width="100%" height="100%">
+                      <AreaChart data={analytics?.monthlyTrend || []} margin={{ top: 10, right: 10, left: -25, bottom: 0 }}>
+                        <defs>
+                          <linearGradient id="colorCreatedM" x1="0" y1="0" x2="0" y2="1">
+                            <stop offset="5%" stopColor="#666666" stopOpacity={0.1}/>
+                            <stop offset="95%" stopColor="#666666" stopOpacity={0}/>
+                          </linearGradient>
+                          <linearGradient id="colorCompletedM" x1="0" y1="0" x2="0" y2="1">
+                            <stop offset="5%" stopColor="#111111" stopOpacity={0.2}/>
+                            <stop offset="95%" stopColor="#111111" stopOpacity={0}/>
+                          </linearGradient>
+                        </defs>
+                        <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f0f0f0" />
+                        <XAxis dataKey="date" tickLine={false} axisLine={false} style={{ fontSize: 10, fill: "#666" }} />
+                        <YAxis tickLine={false} axisLine={false} style={{ fontSize: 10, fill: "#666" }} />
+                        <Tooltip contentStyle={{ fontSize: 11, borderRadius: 8, borderColor: "#e5e5e5" }} />
+                        <Legend wrapperStyle={{ fontSize: 10, paddingTop: 10 }} />
+                        <Area type="monotone" name="Created Tasks" dataKey="created" stroke="#666666" strokeWidth={2} fillOpacity={1} fill="url(#colorCreatedM)" />
+                        <Area type="monotone" name="Completed Tasks" dataKey="completed" stroke="#111111" strokeWidth={2} fillOpacity={1} fill="url(#colorCompletedM)" />
+                      </AreaChart>
+                    </ResponsiveContainer>
+                  </div>
+                </div>
+
+                {/* Status Distribution Pie Chart */}
+                <div className="p-5 border border-border-custom rounded-lg bg-white shadow-sm space-y-4 text-left">
+                  <h4 className="text-xs font-bold text-foreground tracking-tight uppercase border-b border-border-custom pb-2">
+                    Status Distribution
+                  </h4>
+                  <div className="h-64 w-full flex items-center justify-center">
+                    <ResponsiveContainer width="100%" height="100%">
+                      <PieChart>
+                        <Pie
+                          data={statusData}
+                          cx="50%"
+                          cy="50%"
+                          innerRadius={60}
+                          outerRadius={80}
+                          paddingAngle={3}
+                          dataKey="value"
                         >
-                          <Edit2 className="w-3.5 h-3.5" />
-                        </button>
-                        <button
-                          onClick={() => setDeletingTaskId(task._id)}
-                          className="text-secondary-text hover:text-foreground p-1 hover:bg-hover-custom rounded transition cursor-pointer"
-                          aria-label="Delete task"
-                        >
-                          <Trash2 className="w-3.5 h-3.5" />
-                        </button>
-                      </div>
-                    </motion.div>
-                  );
-                })
-              ) : (
-                <EmptyState
-                  title="No pending tasks"
-                  description={
-                    dashboardCategoryFilter !== "all"
-                      ? `No tasks found under category "${dashboardCategoryFilter}".`
-                      : "You have no pending tasks. Enjoy your day or create a new one!"
-                  }
-                  actionText={dashboardCategoryFilter === "all" ? "Create Task" : undefined}
-                  onAction={() => setCreateModalOpen(true)}
-                />
-              )}
-            </AnimatePresence>
-            
-            {dashboardPendingTasks.length > 0 && (
-              <div className="pt-2 text-center select-none">
-                <Link href="/dashboard/tasks">
-                  <span className="inline-flex items-center gap-1.5 text-xs font-bold text-secondary-text hover:text-foreground transition cursor-pointer">
-                    <span>Manage all {totalCount} tasks in Workspace</span>
-                    <ChevronRight className="w-3.5 h-3.5" />
-                  </span>
-                </Link>
-              </div>
-            )}
-          </div>
-        </div>
-
-        {/* Right Side: Productivity Widgets */}
-        <div className="space-y-6 select-none">
-          
-          {/* Widget 1: Completion rate progress */}
-          <div className="p-5 border border-border-custom rounded-lg bg-white shadow-sm space-y-4 text-left">
-            <div className="flex items-center justify-between">
-              <h3 className="text-xs font-bold text-foreground tracking-tight uppercase">
-                Productivity Brief
-              </h3>
-              <TrendingUp className="w-4 h-4 text-secondary-text shrink-0" />
-            </div>
-
-            <div className="space-y-2">
-              <div className="flex justify-between items-end text-xs">
-                <span className="text-secondary-text font-medium">Completion rate</span>
-                <span className="text-foreground font-bold">{completionRate}%</span>
-              </div>
-              <div className="w-full h-2 bg-secondary-bg border border-border-custom rounded-full overflow-hidden">
-                <motion.div
-                  initial={{ width: 0 }}
-                  animate={{ width: `${completionRate}%` }}
-                  transition={{ duration: 0.5, ease: "easeOut" }}
-                  className="h-full bg-foreground rounded-full"
-                />
-              </div>
-              <p className="text-[10px] text-secondary-text leading-normal pt-1">
-                Completed {completedCount} of {totalCount} total logged tasks. Keep it up!
-              </p>
-            </div>
-          </div>
-
-          {/* Widget 2: Task Distribution Breakdown & Priority Breakdown */}
-          <div className="p-5 border border-border-custom rounded-lg bg-white shadow-sm space-y-4 text-left">
-            <h3 className="text-xs font-bold text-foreground tracking-tight uppercase border-b border-border-custom pb-2">
-              Status & Priority Metrics
-            </h3>
-            
-            <div className="grid grid-cols-2 gap-4 text-xs">
-              {/* Status Breakdown */}
-              <div className="space-y-2">
-                <span className="text-[9px] font-bold text-secondary-text uppercase block">Status</span>
-                <div className="space-y-1.5">
-                  <div className="flex justify-between">
-                    <span className="text-secondary-text">Todo:</span>
-                    <span className="font-bold text-foreground">{todoCount}</span>
+                          {statusData.map((entry, index) => (
+                            <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
+                          ))}
+                        </Pie>
+                        <Tooltip formatter={(value) => [`${value} tasks`]} contentStyle={{ fontSize: 11, borderRadius: 8, borderColor: "#e5e5e5" }} />
+                        <Legend wrapperStyle={{ fontSize: 10 }} />
+                      </PieChart>
+                    </ResponsiveContainer>
                   </div>
-                  <div className="flex justify-between">
-                    <span className="text-secondary-text">Running:</span>
-                    <span className="font-bold text-foreground">{inProgressCount}</span>
-                  </div>
-                  <div className="flex justify-between">
-                    <span className="text-secondary-text">Done:</span>
-                    <span className="font-bold text-foreground">{completedCount}</span>
+                </div>
+
+                {/* Priority Distribution Bar Chart */}
+                <div className="p-5 border border-border-custom rounded-lg bg-white shadow-sm space-y-4 text-left">
+                  <h4 className="text-xs font-bold text-foreground tracking-tight uppercase border-b border-border-custom pb-2">
+                    Priority Distribution
+                  </h4>
+                  <div className="h-64 w-full">
+                    <ResponsiveContainer width="100%" height="100%">
+                      <BarChart data={priorityData} margin={{ top: 10, right: 10, left: -25, bottom: 0 }}>
+                        <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f0f0f0" />
+                        <XAxis dataKey="name" tickLine={false} axisLine={false} style={{ fontSize: 10, fill: "#666" }} />
+                        <YAxis tickLine={false} axisLine={false} style={{ fontSize: 10, fill: "#666" }} />
+                        <Tooltip cursor={{ fill: "transparent" }} contentStyle={{ fontSize: 11, borderRadius: 8, borderColor: "#e5e5e5" }} />
+                        <Bar dataKey="count" fill="#111111" radius={[4, 4, 0, 0]} maxBarSize={45}>
+                          {priorityData.map((entry, index) => (
+                            <Cell key={`cell-${index}`} fill={entry.name === "Critical" ? "#111111" : "#666666"} />
+                          ))}
+                        </Bar>
+                      </BarChart>
+                    </ResponsiveContainer>
                   </div>
                 </div>
               </div>
-
-              {/* Priority Breakdown */}
-              <div className="space-y-2">
-                <span className="text-[9px] font-bold text-secondary-text uppercase block">Priority</span>
-                <div className="space-y-1.5">
-                  <div className="flex justify-between">
-                    <span className="text-secondary-text">Critical:</span>
-                    <span className="font-bold text-foreground">{tasks.filter(t => t.priority === "critical").length}</span>
-                  </div>
-                  <div className="flex justify-between">
-                    <span className="text-secondary-text">High:</span>
-                    <span className="font-bold text-foreground">{tasks.filter(t => t.priority === "high").length}</span>
-                  </div>
-                  <div className="flex justify-between">
-                    <span className="text-secondary-text">Medium:</span>
-                    <span className="font-bold text-foreground">{tasks.filter(t => t.priority === "medium" || !t.priority).length}</span>
-                  </div>
-                  <div className="flex justify-between">
-                    <span className="text-secondary-text">Low:</span>
-                    <span className="font-bold text-foreground">{tasks.filter(t => t.priority === "low").length}</span>
-                  </div>
-                </div>
-              </div>
-            </div>
-          </div>
-
-          {/* Widget 3: Category Statistics */}
-          <div className="p-5 border border-border-custom rounded-lg bg-white shadow-sm space-y-3.5 text-left">
-            <h3 className="text-xs font-bold text-foreground tracking-tight uppercase border-b border-border-custom pb-2 flex items-center gap-1.5">
-              <Folder className="w-4 h-4 text-secondary-text" />
-              <span>Category Workspace Statistics</span>
-            </h3>
-            <div className="space-y-2 text-xs">
-              {[
-                { name: "Work Tasks", count: categoryStats.work },
-                { name: "Personal Tasks", count: categoryStats.personal },
-                { name: "Study Tasks", count: categoryStats.study },
-                { name: "Health Tasks", count: categoryStats.health }
-              ].map((cat, idx) => (
-                <div key={idx} className="flex justify-between items-center py-0.5">
-                  <span className="text-secondary-text font-medium">{cat.name}:</span>
-                  <span className="font-bold text-foreground px-2 py-0.5 border border-border-custom bg-secondary-bg rounded text-[10px]">{cat.count}</span>
-                </div>
-              ))}
-            </div>
-          </div>
-
-          {/* Widget 4: Upcoming Deadlines */}
-          <div className="p-5 border border-border-custom rounded-lg bg-white shadow-sm space-y-4 text-left">
-            <h3 className="text-xs font-bold text-foreground tracking-tight uppercase border-b border-border-custom pb-2 flex items-center gap-1.5">
-              <Calendar className="w-4 h-4 text-secondary-text" />
-              <span>Upcoming Deadlines</span>
-            </h3>
-
-            {upcomingDeadlines.length > 0 ? (
-              <div className="flex flex-col gap-2">
-                {upcomingDeadlines.map((task) => {
-                  const overdue = isTaskOverdue(task);
-                  return (
-                    <div key={task._id} className="p-2.5 border border-border-custom rounded-md bg-secondary-bg space-y-1.5 text-left">
-                      <div className="flex justify-between items-start gap-2">
-                        <span className="text-xs font-semibold text-foreground truncate">{task.title}</span>
-                        <span className={`text-[9px] uppercase font-bold shrink-0 px-1.5 py-0.5 border rounded ${overdue ? "border-neutral-400 bg-neutral-200 text-neutral-900" : "border-border-custom bg-white text-secondary-text"}`}>
-                          {overdue ? "Overdue" : "Pending"}
-                        </span>
-                      </div>
-                      <div className="flex justify-between text-[10px] text-secondary-text">
-                        <span>{task.category}</span>
-                        <span className="font-semibold">{new Date(task.dueDate!).toLocaleDateString(undefined, { month: "short", day: "numeric", year: "numeric" })}</span>
-                      </div>
-                    </div>
-                  );
-                })}
-              </div>
-            ) : (
-              <p className="text-xs text-secondary-text text-center py-2">
-                No upcoming deadlines.
-              </p>
             )}
-          </div>
-
-          {/* Widget 5: Recent Activity logs */}
-          <div className="p-5 border border-border-custom rounded-lg bg-white shadow-sm space-y-4 text-left">
-            <h3 className="text-xs font-bold text-foreground tracking-tight uppercase border-b border-border-custom pb-2">
-              Recent Activity
-            </h3>
-            
-            {recentActivities.length > 0 ? (
-              <div className="relative border-l border-border-custom ml-1.5 pl-3.5 space-y-4 text-left">
-                {recentActivities.map((act) => (
-                  <div key={act.id} className="relative text-xs leading-normal">
-                    {/* Ring timeline marker */}
-                    <div className="absolute -left-[19.5px] top-1 w-2.5 h-2.5 rounded-full bg-white border border-foreground" />
-                    
-                    <span className="text-foreground font-semibold line-clamp-2">
-                      {act.description}
-                    </span>
-                    <span className="text-[10px] text-secondary-text font-medium block mt-1 leading-none">
-                      {act.date}
-                    </span>
-                  </div>
-                ))}
-              </div>
-            ) : (
-              <p className="text-xs text-secondary-text text-center py-4">
-                No recent activity recorded.
-              </p>
-            )}
-          </div>
-        </div>
-      </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
 
       {/* CREATE TASK MODAL */}
       <Modal
@@ -760,6 +874,61 @@ export default function DashboardPage() {
                 <option value="done">Done</option>
               </select>
             </div>
+          </div>
+
+          {/* Recurrence Options inside Dashboard Creation modal */}
+          <div className="border-t border-border-custom pt-4 space-y-4">
+            <div className="flex items-center gap-2 select-none">
+              <input
+                type="checkbox"
+                id="dash-create-isRecurring"
+                disabled={createTaskMutation.isPending}
+                className="w-4 h-4 rounded border-border-custom text-foreground focus:ring-foreground accent-foreground cursor-pointer"
+                {...registerCreate("isRecurring")}
+              />
+              <label htmlFor="dash-create-isRecurring" className="text-xs font-bold text-foreground cursor-pointer select-none">
+                Recurring Task (Repeats automatically upon completion)
+              </label>
+            </div>
+
+            {isRecurringCreate && (
+              <div className="grid grid-cols-2 gap-3.5 pt-1">
+                <div className="flex flex-col gap-1.5 select-none">
+                  <label className="text-xs font-semibold text-foreground tracking-tight">
+                    Recurrence Interval
+                  </label>
+                  <select
+                    disabled={createTaskMutation.isPending}
+                    className="
+                      w-full px-3 py-2 text-sm bg-white border border-border-custom rounded-md 
+                      text-foreground outline-none cursor-pointer transition uppercase font-semibold
+                      focus:border-foreground focus:ring-1 focus:ring-foreground
+                    "
+                    {...registerCreate("recurrenceType")}
+                  >
+                    <option value="daily">Daily</option>
+                    <option value="weekly">Weekly</option>
+                    <option value="monthly">Monthly</option>
+                  </select>
+                </div>
+
+                <div className="flex flex-col gap-1.5 select-none">
+                  <label className="text-xs font-semibold text-foreground tracking-tight">
+                    End Date (Optional)
+                  </label>
+                  <input
+                    type="date"
+                    disabled={createTaskMutation.isPending}
+                    className="
+                      w-full px-3 py-2 text-sm bg-white border border-border-custom rounded-md 
+                      text-foreground outline-none cursor-pointer transition
+                      focus:border-foreground focus:ring-1 focus:ring-foreground
+                    "
+                    {...registerCreate("recurrenceEndDate")}
+                  />
+                </div>
+              </div>
+            )}
           </div>
 
           <div className="flex justify-end gap-2 pt-2 select-none">
@@ -901,6 +1070,61 @@ export default function DashboardPage() {
                 <option value="done">Done</option>
               </select>
             </div>
+          </div>
+
+          {/* Recurrence Options inside Dashboard Edit modal */}
+          <div className="border-t border-border-custom pt-4 space-y-4">
+            <div className="flex items-center gap-2 select-none">
+              <input
+                type="checkbox"
+                id="dash-edit-isRecurring"
+                disabled={updateTaskMutation.isPending}
+                className="w-4 h-4 rounded border-border-custom text-foreground focus:ring-foreground accent-foreground cursor-pointer"
+                {...registerEdit("isRecurring")}
+              />
+              <label htmlFor="dash-edit-isRecurring" className="text-xs font-bold text-foreground cursor-pointer select-none">
+                Recurring Task (Repeats automatically upon completion)
+              </label>
+            </div>
+
+            {isRecurringEdit && (
+              <div className="grid grid-cols-2 gap-3.5 pt-1">
+                <div className="flex flex-col gap-1.5 select-none">
+                  <label className="text-xs font-semibold text-foreground tracking-tight">
+                    Recurrence Interval
+                  </label>
+                  <select
+                    disabled={updateTaskMutation.isPending}
+                    className="
+                      w-full px-3 py-2 text-sm bg-white border border-border-custom rounded-md 
+                      text-foreground outline-none cursor-pointer transition uppercase font-semibold
+                      focus:border-foreground focus:ring-1 focus:ring-foreground
+                    "
+                    {...registerEdit("recurrenceType")}
+                  >
+                    <option value="daily">Daily</option>
+                    <option value="weekly">Weekly</option>
+                    <option value="monthly">Monthly</option>
+                  </select>
+                </div>
+
+                <div className="flex flex-col gap-1.5 select-none">
+                  <label className="text-xs font-semibold text-foreground tracking-tight">
+                    End Date (Optional)
+                  </label>
+                  <input
+                    type="date"
+                    disabled={updateTaskMutation.isPending}
+                    className="
+                      w-full px-3 py-2 text-sm bg-white border border-border-custom rounded-md 
+                      text-foreground outline-none cursor-pointer transition
+                      focus:border-foreground focus:ring-1 focus:ring-foreground
+                    "
+                    {...registerEdit("recurrenceEndDate")}
+                  />
+                </div>
+              </div>
+            )}
           </div>
 
           <div className="flex justify-end gap-2 pt-2 select-none">

@@ -11,6 +11,9 @@ export interface Task {
   category: "work" | "personal" | "study" | "health";
   logs?: { _id: string; content: string; createdAt: string }[];
   userId: string;
+  isRecurring?: boolean;
+  recurrenceType?: "daily" | "weekly" | "monthly" | null;
+  recurrenceEndDate?: string | null;
   createdAt: string;
   updatedAt: string;
 }
@@ -42,6 +45,9 @@ export const taskService = {
     priority?: string;
     dueDate?: string | null;
     category?: string;
+    isRecurring?: boolean;
+    recurrenceType?: string | null;
+    recurrenceEndDate?: string | null;
   }): Promise<ApiResponse<Task>> {
     const response = await apiClient.post<ApiResponse<Task>>("/tasks", data);
     return response.data;

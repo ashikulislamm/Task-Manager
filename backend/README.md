@@ -30,16 +30,27 @@ src/
 │   └── db.js                 # Mongoose connection setup
 ├── controllers/
 │   ├── auth.controller.js    # Auth route controllers (register, login, etc.)
-│   └── task.controller.js    # Task CRUD controllers
+│   ├── task.controller.js    # Task CRUD controllers
+│   ├── analytics.controller.js # Productivity metrics and trends controller
+│   ├── activity.controller.js  # User activity log controller
+│   └── focus.controller.js     # Pomodoro focus session controller
 ├── services/
 │   ├── auth.service.js       # Core business logic for authentication
-│   └── task.service.js       # Core business logic for tasks & ownership
+│   ├── task.service.js       # Core business logic for tasks & ownership
+│   ├── analytics.service.js  # Productivity data compiler and aggregator
+│   ├── activity.service.js   # Service tracking and compiling activities
+│   └── focus.service.js      # Service managing focus sessions
 ├── models/
 │   ├── User.model.js         # Mongoose User Schema
-│   └── Task.model.js         # Mongoose Task Schema
+│   ├── Task.model.js         # Mongoose Task Schema (with completedAt & recurrence)
+│   ├── Activity.model.js     # Mongoose Activity Log Schema
+│   └── FocusSession.model.js # Mongoose Focus Session Pomodoro Schema
 ├── routes/
 │   ├── auth.routes.js        # Auth endpoint routers
 │   ├── task.routes.js        # Task endpoint routers
+│   ├── analytics.routes.js   # Analytics endpoint routers
+│   ├── activity.routes.js    # Activity timeline endpoint routers
+│   ├── focus.routes.js       # Pomodoro focus session routers
 │   └── index.js              # Aggregated root API router
 ├── middlewares/
 │   ├── auth.middleware.js    # JWT verification & req.user attachment
@@ -47,7 +58,7 @@ src/
 │   └── validate.middleware.js# Zod request validation middleware
 ├── validators/
 │   ├── auth.validation.js    # Auth Zod validation schemas
-│   └── task.validation.js    # Task Zod validation schemas
+│   └── task.validation.js    # Task Zod validation schemas (with recurrence refinement)
 ├── utils/
 │   ├── ApiError.js           # Custom API error formatting class
 │   ├── ApiResponse.js        # Standard success response formatter
@@ -210,4 +221,98 @@ All routes (except health-check) are prefixed with `/api`.
 #### **Delete Task**
 - **Route**: `DELETE /api/tasks/:id`
 - **Path Parameter**: `id` - MongoDB ObjectId.
+- **Response**: `200 OK`
+
+---
+
+### 3. Productivity Analytics Endpoints
+
+#### **Get Analytics Overview**
+- **Route**: `GET /api/analytics/overview`
+- **Response**: `200 OK`
+  - **Payload Structure**:
+    ```json
+    {
+      "success": true,
+      "message": "Analytics retrieved successfully",
+      "data": {
+        "completionRate": 87,
+        "totalTasks": 33,
+        "completedTasks": 22,
+        "overdueTasks": 3,
+        "weekly": { "created": 14, "completed": 11 },
+        "monthly": { "created": 42, "completed": 35 },
+        "statusDistribution": { "todo": 6, "inProgress": 5, "done": 22 },
+        "priorityDistribution": { "critical": 3, "high": 7, "medium": 10, "low": 4 },
+        "weeklyTrend": [ { "date": "Jun 25", "created": 2, "completed": 1 }, ... ],
+        "monthlyTrend": [ ... ],
+        "focus": { "hoursThisWeek": 2.5, "hoursThisMonth": 12.0, "sessionsCompleted": 6 }
+      }
+    }
+    ```
+
+---
+
+### 4. Activity Timeline Endpoints
+
+#### **Get Paginated Activities**
+- **Route**: `GET /api/activities`
+- **Query Parameters**:
+  - `page` (default 1)
+  - `limit` (default 20)
+- **Response**: `200 OK`
+  - **Payload Structure**:
+    ```json
+    {
+      "success": true,
+      "message": "Activities retrieved successfully",
+      "data": {
+        "activities": [
+          {
+            "_id": "603f7e1b9b1e8e2b8c9d1a2b",
+            "userId": "603f7e1b9b1e8e2b8c9d1a1a",
+            "taskId": { "_id": "603f7e1b9b1e8e2b8c9d1a1b", "title": "Setup deploy" },
+            "action": "status_changed",
+            "metadata": { "title": "Setup deploy", "oldStatus": "todo", "newStatus": "done" },
+            "createdAt": "2026-06-25T08:20:00.000Z"
+          }
+        ],
+        "totalPages": 5,
+        "currentPage": 1,
+        "totalActivities": 94
+      }
+    }
+    ```
+
+---
+
+### 5. Focus Mode Endpoints
+
+#### **Start Focus Session**
+- **Route**: `POST /api/focus/start`
+- **Request Body**:
+  ```json
+  {
+    "taskId": "603f7e1b9b1e8e2b8c9d1a1b",
+    "duration": 25
+  }
+  ```
+- **Response**: `201 Created`
+
+#### **End Focus Session**
+- **Route**: `POST /api/focus/end`
+- **Request Body**:
+  ```json
+  {
+    "status": "completed"
+  }
+  ```
+- **Response**: `200 OK`
+
+#### **Get Active Focus Session**
+- **Route**: `GET /api/focus/current`
+- **Response**: `200 OK`
+
+#### **Get Focus Session History**
+- **Route**: `GET /api/focus/history`
 - **Response**: `200 OK`

@@ -5,15 +5,15 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import * as z from "zod";
-import { 
-  Plus, 
-  Trash2, 
-  Edit2, 
-  CheckCircle2, 
-  Circle, 
-  Clock, 
-  CheckSquare, 
-  Search, 
+import {
+  Plus,
+  Trash2,
+  Edit2,
+  CheckCircle2,
+  Circle,
+  Clock,
+  CheckSquare,
+  Search,
   ArrowUpDown,
   Calendar,
   Folder,
@@ -47,6 +47,9 @@ const taskSchema = z.object({
   priority: z.enum(["low", "medium", "high", "critical"]),
   dueDate: z.string().optional().nullable().or(z.literal("")),
   category: z.enum(["work", "personal", "study", "health"]),
+  isRecurring: z.boolean().optional(),
+  recurrenceType: z.enum(["daily", "weekly", "monthly"]).optional().nullable().or(z.literal("")),
+  recurrenceEndDate: z.string().optional().nullable().or(z.literal("")),
 });
 
 type TaskFormValues = z.infer<typeof taskSchema>;
@@ -64,7 +67,7 @@ export default function MyTasksPage() {
   const [priorityFilter, setPriorityFilter] = useState<"all" | "low" | "medium" | "high" | "critical">("all");
   const [categoryFilter, setCategoryFilter] = useState<"all" | "work" | "personal" | "study" | "health">("all");
   const [sortBy, setSortBy] = useState<"newest" | "oldest" | "alpha-asc" | "alpha-desc" | "priority-asc" | "priority-desc" | "due-asc" | "due-desc">("newest");
-  
+
   const [editingTask, setEditingTask] = useState<Task | null>(null);
   const [deletingTaskId, setDeletingTaskId] = useState<string | null>(null);
   const [selectedTaskDetails, setSelectedTaskDetails] = useState<Task | null>(null);
@@ -75,6 +78,7 @@ export default function MyTasksPage() {
     register: registerCreate,
     handleSubmit: handleCreateSubmit,
     reset: resetCreateForm,
+    watch: watchCreate,
     formState: { errors: createErrors },
   } = useForm<TaskFormValues>({
     resolver: zodResolver(taskSchema),
@@ -85,6 +89,9 @@ export default function MyTasksPage() {
       priority: "medium",
       category: "personal",
       dueDate: "",
+      isRecurring: false,
+      recurrenceType: "daily",
+      recurrenceEndDate: "",
     },
   });
 
@@ -92,6 +99,7 @@ export default function MyTasksPage() {
     register: registerEdit,
     handleSubmit: handleEditSubmit,
     setValue: setEditValue,
+    watch: watchEdit,
     formState: { errors: editErrors },
   } = useForm<TaskFormValues>({
     resolver: zodResolver(taskSchema),
@@ -106,6 +114,9 @@ export default function MyTasksPage() {
       setEditValue("priority", editingTask.priority || "medium");
       setEditValue("category", editingTask.category || "personal");
       setEditValue("dueDate", editingTask.dueDate ? editingTask.dueDate.split("T")[0] : "");
+      setEditValue("isRecurring", editingTask.isRecurring || false);
+      setEditValue("recurrenceType", editingTask.recurrenceType || "daily");
+      setEditValue("recurrenceEndDate", editingTask.recurrenceEndDate ? editingTask.recurrenceEndDate.split("T")[0] : "");
     }
   }, [editingTask, setEditValue]);
 
@@ -190,6 +201,9 @@ export default function MyTasksPage() {
     },
   });
 
+  const isRecurringCreate = watchCreate("isRecurring");
+  const isRecurringEdit = watchEdit("isRecurring");
+
   // Quick Status Transition
   const handleQuickStatusChange = (task: Task, newStatus: "todo" | "in-progress" | "done") => {
     updateTaskMutation.mutate({
@@ -202,6 +216,7 @@ export default function MyTasksPage() {
     const formattedData = {
       ...data,
       dueDate: data.dueDate ? new Date(data.dueDate).toISOString() : null,
+      recurrenceEndDate: data.recurrenceEndDate ? new Date(data.recurrenceEndDate).toISOString() : null,
     };
     createTaskMutation.mutate(formattedData);
   };
@@ -211,6 +226,8 @@ export default function MyTasksPage() {
       const formattedData = {
         ...data,
         dueDate: data.dueDate ? new Date(data.dueDate).toISOString() : null,
+        recurrenceEndDate: data.recurrenceEndDate ? new Date(data.recurrenceEndDate).toISOString() : null,
+        recurrenceType: data.recurrenceType === "" ? null : data.recurrenceType,
       };
       updateTaskMutation.mutate({
         id: editingTask._id,
@@ -515,7 +532,7 @@ export default function MyTasksPage() {
 
         {/* Quick Filter Tabs */}
         <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3 pt-2 border-t border-border-custom/50">
-          <div className="flex bg-neutral-100 border border-border-custom p-0.5 rounded-md text-xs font-semibold text-secondary-text w-full sm:w-auto overflow-x-auto">
+          <div className="flex bg-neutral-100 border border-border-custom p-0.5 rounded-md text-sm font-semibold text-secondary-text w-full sm:w-auto overflow-x-auto">
             {[
               { id: "all", label: `All Tasks (${totalCount})` },
               { id: "today", label: `Due Today (${dueTodayCount})` },
@@ -527,9 +544,9 @@ export default function MyTasksPage() {
                 key={tab.id}
                 onClick={() => setQuickFilter(tab.id as any)}
                 className={`
-                  px-3 py-1.5 rounded transition uppercase leading-none text-[10px] tracking-tight whitespace-nowrap shrink-0
-                  ${quickFilter === tab.id 
-                    ? "bg-white border border-border-custom text-foreground shadow-xs font-bold" 
+                  px-3 py-1.5 rounded transition uppercase leading-none text-[11px] tracking-tight whitespace-nowrap shrink-0
+                  ${quickFilter === tab.id
+                    ? "bg-white border border-border-custom text-foreground shadow-xs font-bold"
                     : "hover:text-foreground hover:bg-hover-custom"
                   }
                 `}
@@ -582,13 +599,13 @@ export default function MyTasksPage() {
                         <Circle className="w-5 h-5" />
                       )}
                     </button>
-                    
+
                     <div className="min-w-0 flex-1">
                       <div className="flex items-center gap-2 flex-wrap">
                         <h4 className={`text-xs font-bold tracking-tight text-foreground truncate ${task.status === "done" ? "line-through text-secondary-text" : ""}`}>
                           {task.title}
                         </h4>
-                        
+
                         {/* Category Badge */}
                         <span className="text-[10px] text-secondary-text font-bold uppercase tracking-tight">
                           [{task.category || "personal"}]
@@ -599,6 +616,13 @@ export default function MyTasksPage() {
                           <span>{getPrioritySymbol(task.priority || "medium")}</span>
                           <span>{task.priority || "medium"}</span>
                         </span>
+
+                        {/* Recurrence Badge */}
+                        {task.isRecurring && (
+                          <span className="inline-flex items-center gap-1 border border-border-custom bg-secondary-bg text-secondary-text px-1.5 py-0.5 rounded text-[9px] font-bold uppercase select-none">
+                            <span>Repeats {task.recurrenceType}</span>
+                          </span>
+                        )}
 
                         {/* Overdue Badge */}
                         {overdue && (
@@ -623,7 +647,7 @@ export default function MyTasksPage() {
                             minute: "2-digit"
                           })}
                         </span>
-                        
+
                         {task.dueDate && (
                           <>
                             <span className="text-secondary-text font-semibold select-none">•</span>
@@ -643,7 +667,7 @@ export default function MyTasksPage() {
                             </span>
                           </>
                         )}
-                        
+
                         <span className="text-secondary-text font-semibold select-none">•</span>
 
                         {/* inline status selector */}
@@ -651,7 +675,7 @@ export default function MyTasksPage() {
                           <span className="text-secondary-text font-medium">Status:</span>
                           <select
                             value={task.status}
-                            onChange={(e) => 
+                            onChange={(e) =>
                               handleQuickStatusChange(task, e.target.value as any)
                             }
                             className="
@@ -703,8 +727,8 @@ export default function MyTasksPage() {
             searchTerm.trim() !== ""
               ? `No tasks match search term "${searchTerm}". Try query edits.`
               : quickFilter !== "all"
-              ? `You have no tasks matching quick filter "${quickFilter}".`
-              : "You haven't logged any tasks yet. Create one to get started!"
+                ? `You have no tasks matching quick filter "${quickFilter}".`
+                : "You haven't logged any tasks yet. Create one to get started!"
           }
           actionText={quickFilter === "all" || searchTerm.trim() !== "" ? "Create Task" : undefined}
           onAction={() => setCreateModalOpen(true)}
@@ -723,7 +747,7 @@ export default function MyTasksPage() {
               onClick={() => setSelectedTaskDetails(null)}
               className="fixed inset-0 bg-black pointer-events-auto"
             />
-            
+
             {/* Slide-over Drawer panel */}
             <motion.div
               initial={{ x: "100%" }}
@@ -996,6 +1020,61 @@ export default function MyTasksPage() {
             </div>
           </div>
 
+          {/* Recurrence Toggle and configuration */}
+          <div className="border-t border-border-custom pt-4 space-y-4">
+            <div className="flex items-center gap-2 select-none">
+              <input
+                type="checkbox"
+                id="create-isRecurring"
+                disabled={createTaskMutation.isPending}
+                className="w-4 h-4 rounded border-border-custom text-foreground focus:ring-foreground accent-foreground cursor-pointer"
+                {...registerCreate("isRecurring")}
+              />
+              <label htmlFor="create-isRecurring" className="text-xs font-bold text-foreground cursor-pointer select-none">
+                Recurring Task (Repeats automatically upon completion)
+              </label>
+            </div>
+
+            {isRecurringCreate && (
+              <div className="grid grid-cols-2 gap-3.5 pt-1">
+                <div className="flex flex-col gap-1.5 select-none">
+                  <label className="text-xs font-semibold text-foreground tracking-tight">
+                    Recurrence Interval
+                  </label>
+                  <select
+                    disabled={createTaskMutation.isPending}
+                    className="
+                      w-full px-3 py-2 text-sm bg-white border border-border-custom rounded-md 
+                      text-foreground outline-none cursor-pointer transition uppercase font-semibold
+                      focus:border-foreground focus:ring-1 focus:ring-foreground
+                    "
+                    {...registerCreate("recurrenceType")}
+                  >
+                    <option value="daily">Daily</option>
+                    <option value="weekly">Weekly</option>
+                    <option value="monthly">Monthly</option>
+                  </select>
+                </div>
+
+                <div className="flex flex-col gap-1.5 select-none">
+                  <label className="text-xs font-semibold text-foreground tracking-tight">
+                    End Date (Optional)
+                  </label>
+                  <input
+                    type="date"
+                    disabled={createTaskMutation.isPending}
+                    className="
+                      w-full px-3 py-2 text-sm bg-white border border-border-custom rounded-md 
+                      text-foreground outline-none cursor-pointer transition
+                      focus:border-foreground focus:ring-1 focus:ring-foreground
+                    "
+                    {...registerCreate("recurrenceEndDate")}
+                  />
+                </div>
+              </div>
+            )}
+          </div>
+
           <div className="flex justify-end gap-2 pt-2 select-none">
             <Button
               variant="outline"
@@ -1135,6 +1214,61 @@ export default function MyTasksPage() {
                 <option value="done">Done</option>
               </select>
             </div>
+          </div>
+
+          {/* Recurrence Toggle and configuration */}
+          <div className="border-t border-border-custom pt-4 space-y-4">
+            <div className="flex items-center gap-2 select-none">
+              <input
+                type="checkbox"
+                id="edit-isRecurring"
+                disabled={updateTaskMutation.isPending}
+                className="w-4 h-4 rounded border-border-custom text-foreground focus:ring-foreground accent-foreground cursor-pointer"
+                {...registerEdit("isRecurring")}
+              />
+              <label htmlFor="edit-isRecurring" className="text-xs font-bold text-foreground cursor-pointer select-none">
+                Recurring Task (Repeats automatically upon completion)
+              </label>
+            </div>
+
+            {isRecurringEdit && (
+              <div className="grid grid-cols-2 gap-3.5 pt-1">
+                <div className="flex flex-col gap-1.5 select-none">
+                  <label className="text-xs font-semibold text-foreground tracking-tight">
+                    Recurrence Interval
+                  </label>
+                  <select
+                    disabled={updateTaskMutation.isPending}
+                    className="
+                      w-full px-3 py-2 text-sm bg-white border border-border-custom rounded-md 
+                      text-foreground outline-none cursor-pointer transition uppercase font-semibold
+                      focus:border-foreground focus:ring-1 focus:ring-foreground
+                    "
+                    {...registerEdit("recurrenceType")}
+                  >
+                    <option value="daily">Daily</option>
+                    <option value="weekly">Weekly</option>
+                    <option value="monthly">Monthly</option>
+                  </select>
+                </div>
+
+                <div className="flex flex-col gap-1.5 select-none">
+                  <label className="text-xs font-semibold text-foreground tracking-tight">
+                    End Date (Optional)
+                  </label>
+                  <input
+                    type="date"
+                    disabled={updateTaskMutation.isPending}
+                    className="
+                      w-full px-3 py-2 text-sm bg-white border border-border-custom rounded-md 
+                      text-foreground outline-none cursor-pointer transition
+                      focus:border-foreground focus:ring-1 focus:ring-foreground
+                    "
+                    {...registerEdit("recurrenceEndDate")}
+                  />
+                </div>
+              </div>
+            )}
           </div>
 
           <div className="flex justify-end gap-2 pt-2 select-none">

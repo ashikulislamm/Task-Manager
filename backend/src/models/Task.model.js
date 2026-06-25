@@ -31,6 +31,20 @@ const taskSchema = new mongoose.Schema(
       enum: ['work', 'personal', 'study', 'health'],
       default: 'personal',
     },
+    completedAt: {
+      type: Date,
+    },
+    isRecurring: {
+      type: Boolean,
+      default: false,
+    },
+    recurrenceType: {
+      type: String,
+      enum: ['daily', 'weekly', 'monthly'],
+    },
+    recurrenceEndDate: {
+      type: Date,
+    },
     logs: [
       {
         content: {
