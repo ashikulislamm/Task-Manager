@@ -34,6 +34,7 @@ export const createTaskSchema = z.object({
       })
       .optional()
       .nullable(),
+    dueTime: z.string().optional().nullable(),
     isRecurring: z.boolean().optional(),
     recurrenceType: z.enum(['daily', 'weekly', 'monthly']).optional().nullable(),
     recurrenceEndDate: z
@@ -84,6 +85,7 @@ export const updateTaskSchema = z.object({
       })
       .optional()
       .nullable(),
+    dueTime: z.string().optional().nullable(),
     isRecurring: z.boolean().optional(),
     recurrenceType: z.enum(['daily', 'weekly', 'monthly']).optional().nullable(),
     recurrenceEndDate: z
@@ -185,6 +187,24 @@ export const updateSubtaskSchema = z.object({
       })
       .optional()
       .nullable(),
+  }),
+});
+
+export const tasksQuerySchema = z.object({
+  query: z.object({
+    status: z.enum(TASK_STATUS_LIST, {
+      invalid_type_error: `Status must be one of: ${TASK_STATUS_LIST.join(', ')}`,
+    }).optional(),
+    priority: z.enum(['low', 'medium', 'high', 'critical'], {
+      invalid_type_error: 'Priority must be one of: low, medium, high, critical',
+    }).optional(),
+    category: z.enum(['work', 'personal', 'study', 'health'], {
+      invalid_type_error: 'Category must be one of: work, personal, study, health',
+    }).optional(),
+    overdue: z.enum(['true', 'false']).optional(),
+    sort: z.enum(['dueDate', '-dueDate', 'priority', '-priority', 'createdAt', '-createdAt']).optional(),
+    page: z.preprocess((val) => (val ? Number(val) : 1), z.number().min(1).default(1)),
+    limit: z.preprocess((val) => (val ? Number(val) : 20), z.number().min(1).max(100).default(20)),
   }),
 });
 

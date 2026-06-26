@@ -1,36 +1,24 @@
 import focusService from '../services/focus.service.js';
 import ApiResponse from '../utils/ApiResponse.js';
 import asyncHandler from '../utils/asyncHandler.js';
-import ApiError from '../utils/ApiError.js';
 
 /**
- * Start a focus session
+ * Start a focus session (Zod validated)
  */
 export const startSession = asyncHandler(async (req, res) => {
   const userId = req.user._id;
   const { taskId, duration, subtaskId } = req.body;
 
-  if (!taskId) {
-    throw new ApiError(400, 'Task ID is required');
-  }
-  if (!duration || isNaN(duration) || duration <= 0) {
-    throw new ApiError(400, 'Duration must be a positive number');
-  }
-
-  const session = await focusService.startSession(userId, taskId, Number(duration), subtaskId);
+  const session = await focusService.startSession(userId, taskId, duration, subtaskId);
   res.status(201).json(new ApiResponse(201, 'Focus session started successfully', session));
 });
 
 /**
- * End the current focus session
+ * End the current focus session (Zod validated)
  */
 export const endSession = asyncHandler(async (req, res) => {
   const userId = req.user._id;
   const { status = 'completed' } = req.body;
-
-  if (!['completed', 'cancelled'].includes(status)) {
-    throw new ApiError(400, 'Invalid ending status. Must be completed or cancelled.');
-  }
 
   const session = await focusService.endSession(userId, status);
   res.status(200).json(new ApiResponse(200, `Focus session marked as ${status}`, session));

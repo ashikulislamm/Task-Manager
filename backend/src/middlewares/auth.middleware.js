@@ -4,7 +4,7 @@ import ApiError from '../utils/ApiError.js';
 import asyncHandler from '../utils/asyncHandler.js';
 
 const protect = asyncHandler(async (req, res, next) => {
-  let token = req.cookies?.token;
+  let token = req.cookies?.accessToken;
 
   // Fallback to Authorization header if cookies are not used (e.g. for testing)
   if (!token && req.headers.authorization && req.headers.authorization.startsWith('Bearer')) {
@@ -12,14 +12,14 @@ const protect = asyncHandler(async (req, res, next) => {
   }
 
   if (!token) {
-    throw new ApiError(401, 'Not authorized, token is missing');
+    throw new ApiError(401, 'Not authorized, access token is missing');
   }
 
   try {
     const decoded = jwt.verify(token, process.env.JWT_SECRET);
     
-    // Find user and select fields excluding password
-    const user = await User.findById(decoded.id).select('-password');
+    // Find user, select fields excluding password, and use lean for performance
+    const user = await User.findById(decoded.id).select('-password').lean();
     if (!user) {
       throw new ApiError(401, 'Not authorized, user not found');
     }
@@ -27,7 +27,7 @@ const protect = asyncHandler(async (req, res, next) => {
     req.user = user;
     next();
   } catch (error) {
-    throw new ApiError(401, 'Not authorized, token invalid or expired');
+    throw new ApiError(401, 'Not authorized, access token invalid or expired');
   }
 });
 

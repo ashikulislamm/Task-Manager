@@ -65,6 +65,7 @@ const taskSchema = z.object({
   status: z.enum(["todo", "in-progress", "done"]),
   priority: z.enum(["low", "medium", "high", "critical"]),
   dueDate: z.string().optional().nullable().or(z.literal("")),
+  dueTime: z.string().optional().nullable().or(z.literal("")),
   category: z.enum(["work", "personal", "study", "health"]),
   isRecurring: z.boolean().optional(),
   recurrenceType: z.enum(["daily", "weekly", "monthly"]).optional().nullable().or(z.literal("")),
@@ -112,6 +113,7 @@ export default function DashboardPage() {
       priority: "medium",
       category: "personal",
       dueDate: "",
+      dueTime: "",
       isRecurring: false,
       recurrenceType: "daily",
       recurrenceEndDate: "",
@@ -140,6 +142,7 @@ export default function DashboardPage() {
       setEditValue("priority", editingTask.priority || "medium");
       setEditValue("category", editingTask.category || "personal");
       setEditValue("dueDate", editingTask.dueDate ? editingTask.dueDate.split("T")[0] : "");
+      setEditValue("dueTime", editingTask.dueTime || "");
       setEditValue("isRecurring", editingTask.isRecurring || false);
       setEditValue("recurrenceType", editingTask.recurrenceType || "daily");
       setEditValue("recurrenceEndDate", editingTask.recurrenceEndDate ? editingTask.recurrenceEndDate.split("T")[0] : "");
@@ -242,6 +245,7 @@ export default function DashboardPage() {
     const formattedData = {
       ...data,
       dueDate: data.dueDate ? new Date(data.dueDate).toISOString() : null,
+      dueTime: data.dueTime || null,
       recurrenceEndDate: data.recurrenceEndDate ? new Date(data.recurrenceEndDate).toISOString() : null,
     };
     createTaskMutation.mutate(formattedData);
@@ -252,6 +256,7 @@ export default function DashboardPage() {
       const formattedData = {
         ...data,
         dueDate: data.dueDate ? new Date(data.dueDate).toISOString() : null,
+        dueTime: data.dueTime || null,
         recurrenceEndDate: data.recurrenceEndDate ? new Date(data.recurrenceEndDate).toISOString() : null,
         recurrenceType: data.recurrenceType === "" ? null : data.recurrenceType,
       };
@@ -268,12 +273,35 @@ export default function DashboardPage() {
     }
   };
 
-  // Overdue Check
+  // Overdue Check (handles date and time combinations)
   const isTaskOverdue = (task: Task) => {
     if (!task.dueDate || task.status === "done") return false;
+    const now = new Date();
+    const taskDueDate = new Date(task.dueDate);
+    if (task.dueTime) {
+      const [hours, minutes] = task.dueTime.split(":").map(Number);
+      if (!isNaN(hours) && !isNaN(minutes)) {
+        taskDueDate.setHours(hours, minutes, 0, 0);
+        return now > taskDueDate;
+      }
+    }
     const today = new Date();
     today.setHours(0, 0, 0, 0);
-    return new Date(task.dueDate) < today;
+    taskDueDate.setHours(0, 0, 0, 0);
+    return taskDueDate < today;
+  };
+
+  // Helper to format 24-hour time to AM/PM format
+  const formatDueTime = (timeStr?: string | null) => {
+    if (!timeStr) return "";
+    const [hoursStr, minutesStr] = timeStr.split(":");
+    const hours = Number(hoursStr);
+    const minutes = Number(minutesStr);
+    if (isNaN(hours) || isNaN(minutes)) return timeStr;
+    const ampm = hours >= 12 ? "PM" : "AM";
+    const displayHours = hours % 12 || 12;
+    const displayMinutes = minutes < 10 ? `0${minutes}` : minutes;
+    return `${displayHours}:${displayMinutes} ${ampm}`;
   };
 
   // Pending tasks filter
@@ -507,8 +535,8 @@ export default function DashboardPage() {
                                   {task.status}
                                 </span>
                                 {task.dueDate && (
-                                  <span className={`text-[10px] font-semibold leading-none shrink-0 ${overdue ? "text-neutral-900 font-bold" : "text-secondary-text"}`}>
-                                    Due: {new Date(task.dueDate).toLocaleDateString(undefined, { month: "short", day: "numeric" })}
+                                  <span className={`text-[10px] font-semibold leading-none shrink-0 ${overdue ? "text-neutral-900 font-bold animate-pulse" : "text-secondary-text"}`}>
+                                    Due: {new Date(task.dueDate).toLocaleDateString(undefined, { month: "short", day: "numeric" })}{task.dueTime ? ` at ${formatDueTime(task.dueTime)}` : ""}
                                   </span>
                                 )}
                               </div>
@@ -1005,20 +1033,38 @@ export default function DashboardPage() {
           </div>
 
           <div className="grid grid-cols-2 gap-3.5">
-            <div className="flex flex-col gap-1.5 select-none">
-              <label className="text-xs font-semibold text-foreground tracking-tight">
-                Due Date
-              </label>
-              <input
-                type="date"
-                disabled={createTaskMutation.isPending}
-                className="
-                  w-full px-3 py-2 text-sm bg-white border border-border-custom rounded-md 
-                  text-foreground outline-none cursor-pointer transition
-                  focus:border-foreground focus:ring-1 focus:ring-foreground
-                "
-                {...registerCreate("dueDate")}
-              />
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <div className="flex flex-col gap-1.5 select-none">
+                <label className="text-xs font-semibold text-foreground tracking-tight">
+                  Due Date
+                </label>
+                <input
+                  type="date"
+                  disabled={createTaskMutation.isPending}
+                  className="
+                    w-full px-3 py-2 text-sm bg-white border border-border-custom rounded-md 
+                    text-foreground outline-none cursor-pointer transition
+                    focus:border-foreground focus:ring-1 focus:ring-foreground
+                  "
+                  {...registerCreate("dueDate")}
+                />
+              </div>
+
+              <div className="flex flex-col gap-1.5 select-none">
+                <label className="text-xs font-semibold text-foreground tracking-tight">
+                  Due Time
+                </label>
+                <input
+                  type="time"
+                  disabled={createTaskMutation.isPending}
+                  className="
+                    w-full px-3 py-2 text-sm bg-white border border-border-custom rounded-md 
+                    text-foreground outline-none cursor-pointer transition
+                    focus:border-foreground focus:ring-1 focus:ring-foreground
+                  "
+                  {...registerCreate("dueTime")}
+                />
+              </div>
             </div>
 
             <div className="flex flex-col gap-1.5 select-none">
@@ -1201,20 +1247,38 @@ export default function DashboardPage() {
           </div>
 
           <div className="grid grid-cols-2 gap-3.5">
-            <div className="flex flex-col gap-1.5 select-none">
-              <label className="text-xs font-semibold text-foreground tracking-tight">
-                Due Date
-              </label>
-              <input
-                type="date"
-                disabled={updateTaskMutation.isPending}
-                className="
-                  w-full px-3 py-2 text-sm bg-white border border-border-custom rounded-md 
-                  text-foreground outline-none cursor-pointer transition
-                  focus:border-foreground focus:ring-1 focus:ring-foreground
-                "
-                {...registerEdit("dueDate")}
-              />
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <div className="flex flex-col gap-1.5 select-none">
+                <label className="text-xs font-semibold text-foreground tracking-tight">
+                  Due Date
+                </label>
+                <input
+                  type="date"
+                  disabled={updateTaskMutation.isPending}
+                  className="
+                    w-full px-3 py-2 text-sm bg-white border border-border-custom rounded-md 
+                    text-foreground outline-none cursor-pointer transition
+                    focus:border-foreground focus:ring-1 focus:ring-foreground
+                  "
+                  {...registerEdit("dueDate")}
+                />
+              </div>
+
+              <div className="flex flex-col gap-1.5 select-none">
+                <label className="text-xs font-semibold text-foreground tracking-tight">
+                  Due Time
+                </label>
+                <input
+                  type="time"
+                  disabled={updateTaskMutation.isPending}
+                  className="
+                    w-full px-3 py-2 text-sm bg-white border border-border-custom rounded-md 
+                    text-foreground outline-none cursor-pointer transition
+                    focus:border-foreground focus:ring-1 focus:ring-foreground
+                  "
+                  {...registerEdit("dueTime")}
+                />
+              </div>
             </div>
 
             <div className="flex flex-col gap-1.5 select-none">

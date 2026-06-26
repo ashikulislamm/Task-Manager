@@ -3,11 +3,20 @@ import cors from 'cors';
 import helmet from 'helmet';
 import morgan from 'morgan';
 import cookieParser from 'cookie-parser';
+import compression from 'compression';
+import { rateLimit } from 'express-rate-limit';
+import mongoose from 'mongoose';
+
 import apiRouter from './routes/index.js';
 import errorHandler from './middlewares/error.middleware.js';
 import ApiError from './utils/ApiError.js';
+import { csrfProtection } from './middlewares/csrf.middleware.js';
+import logger from './utils/logger.js';
 
 const app = express();
+
+// Apply response compression
+app.use(compression());
 
 // Set security HTTP headers
 app.use(helmet({
@@ -29,33 +38,65 @@ app.use(
       if (allowedOrigins.includes(cleanOrigin) || allowedOrigins.includes('*')) {
         callback(null, true);
       } else {
-        console.warn(`CORS blocked request from origin: ${origin}. Allowed origins:`, allowedOrigins);
+        logger.warn(`CORS blocked request from origin: ${origin}. Allowed origins: ${allowedOrigins}`);
         callback(null, false);
       }
     },
     credentials: true,
     methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
-    allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With', 'Accept'],
+    allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With', 'Accept', 'X-CSRF-Token'],
   })
 );
+
+// Global rate limiting
+const limiter = rateLimit({
+  windowMs: 15 * 60 * 1000, // 15 minutes
+  max: 200, // Limit each IP to 200 requests per window
+  message: { success: false, message: 'Too many requests from this IP, please try again later.' },
+  standardHeaders: true,
+  legacyHeaders: false,
+});
+app.use(limiter);
 
 // Development logging
 if (process.env.NODE_ENV !== 'production') {
   app.use(morgan('dev'));
 }
 
-// Body parsers
-app.use(express.json());
-app.use(express.urlencoded({ extended: true }));
+// Body parsers with request payload limits (protects against DOS)
+app.use(express.json({ limit: '15kb' }));
+app.use(express.urlencoded({ extended: true, limit: '15kb' }));
 
 // Cookie parser
 app.use(cookieParser());
 
-// Home/health check route
+// Anti-CSRF protection (must run after cookie parsing)
+app.use(csrfProtection);
+
+// Home route
 app.get('/', (req, res) => {
   res.status(200).json({
     success: true,
     message: 'Task Manager API is running',
+  });
+});
+
+// Database-connected health check
+app.get('/api/health', (req, res) => {
+  const dbState = mongoose.connection.readyState;
+  const states = {
+    0: 'disconnected',
+    1: 'connected',
+    2: 'connecting',
+    3: 'disconnecting',
+  };
+  const isHealthy = dbState === 1;
+
+  res.status(isHealthy ? 200 : 503).json({
+    status: isHealthy ? 'UP' : 'DOWN',
+    uptime: process.uptime(),
+    timestamp: new Date(),
+    database: states[dbState] || 'unknown',
   });
 });
 

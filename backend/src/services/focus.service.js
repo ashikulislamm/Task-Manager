@@ -68,7 +68,7 @@ class FocusService {
 
     const task = await Task.findById(session.taskId);
     const taskTitle = task ? task.title : 'Deleted Task';
-    
+
     let subtaskTitle = undefined;
     if (task && session.subtaskId) {
       const subtask = task.subtasks.id(session.subtaskId) || task.subtasks.find(s => s._id.toString() === session.subtaskId.toString());
@@ -94,7 +94,7 @@ class FocusService {
     const session = await FocusSession.findOne({ userId, status: 'active' })
       .populate('taskId', 'title description status priority category subtasks')
       .lean();
-    
+
     if (session && session.taskId && session.subtaskId) {
       const subtask = session.taskId.subtasks?.find(s => s._id.toString() === session.subtaskId.toString());
       if (subtask) {

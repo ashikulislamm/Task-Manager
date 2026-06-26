@@ -1,0 +1,115 @@
+[2026-06-26 22:08:42:842] [[32minfo[39m]: [32mMongoDB connected! DB HOST: ac-k0b5ibv-shard-00-02.agxa84l.mongodb.net[39m
+[2026-06-26 22:08:42:842] [[32minfo[39m]: [32mServer listening on http://localhost:3000 in development mode[39m
+[2026-06-26 22:10:15:1015] [[33mwarn[39m]: [33mGET /api/auth/me - 401 client error: Not authorized, access token invalid or expired[39m
+[2026-06-26 22:10:32:1032] [[33mwarn[39m]: [33mPOST /api/auth/login - 403 client error: CSRF verification failed. Missing or invalid X-CSRF-Token header.[39m
+[2026-06-26 22:10:47:1047] [[33mwarn[39m]: [33mPOST /api/auth/login - 403 client error: CSRF verification failed. Missing or invalid X-CSRF-Token header.[39m
+[2026-06-26 22:11:17:1117] [[32minfo[39m]: [32mMongoDB connected! DB HOST: ac-k0b5ibv-shard-00-02.agxa84l.mongodb.net[39m
+[2026-06-26 22:11:17:1117] [[32minfo[39m]: [32mServer listening on http://localhost:3000 in development mode[39m
+[2026-06-26 22:11:44:1144] [[31merror[39m]: [31mGET /api/tasks - 500 Internal Error: Cannot set property query of #<IncomingMessage> which has only a getter[39m
+TypeError: Cannot set property query of #<IncomingMessage> which has only a getter
+    at file:///F:/Web%20Development/Task%20Manager/backend/src/middlewares/validate.middleware.js:13:33
+    at Layer.handleRequest (F:\Web Development\Task Manager\backend\node_modules\router\lib\layer.js:152:17)
+    at next (F:\Web Development\Task Manager\backend\node_modules\router\lib\route.js:157:13)
+    at Route.dispatch (F:\Web Development\Task Manager\backend\node_modules\router\lib\route.js:117:3)
+    at handle (F:\Web Development\Task Manager\backend\node_modules\router\index.js:435:11)
+    at Layer.handleRequest (F:\Web Development\Task Manager\backend\node_modules\router\lib\layer.js:152:17)
+    at F:\Web Development\Task Manager\backend\node_modules\router\index.js:295:15
+    at processParams (F:\Web Development\Task Manager\backend\node_modules\router\index.js:582:12)
+    at next (F:\Web Development\Task Manager\backend\node_modules\router\index.js:291:5)
+    at file:///F:/Web%20Development/Task%20Manager/backend/src/middlewares/auth.middleware.js:28:5
+[2026-06-26 22:11:49:1149] [[31merror[39m]: [31mGET /api/tasks - 500 Internal Error: Cannot set property query of #<IncomingMessage> which has only a getter[39m
+TypeError: Cannot set property query of #<IncomingMessage> which has only a getter
+    at file:///F:/Web%20Development/Task%20Manager/backend/src/middlewares/validate.middleware.js:13:33
+    at Layer.handleRequest (F:\Web Development\Task Manager\backend\node_modules\router\lib\layer.js:152:17)
+    at next (F:\Web Development\Task Manager\backend\node_modules\router\lib\route.js:157:13)
+    at Route.dispatch (F:\Web Development\Task Manager\backend\node_modules\router\lib\route.js:117:3)
+    at handle (F:\Web Development\Task Manager\backend\node_modules\router\index.js:435:11)
+    at Layer.handleRequest (F:\Web Development\Task Manager\backend\node_modules\router\lib\layer.js:152:17)
+    at F:\Web Development\Task Manager\backend\node_modules\router\index.js:295:15
+    at processParams (F:\Web Development\Task Manager\backend\node_modules\router\index.js:582:12)
+    at next (F:\Web Development\Task Manager\backend\node_modules\router\index.js:291:5)
+    at file:///F:/Web%20Development/Task%20Manager/backend/src/middlewares/auth.middleware.js:28:5
+[2026-06-26 22:12:26:1226] [[32minfo[39m]: [32mMongoDB connected! DB HOST: ac-k0b5ibv-shard-00-02.agxa84l.mongodb.net[39m
+[2026-06-26 22:12:26:1226] [[32minfo[39m]: [32mServer listening on http://localhost:3000 in development mode[39m
+[2026-06-26 22:13:36:1336] [[32minfo[39m]: [32mMongoDB connected! DB HOST: ac-k0b5ibv-shard-00-00.agxa84l.mongodb.net[39m
+[2026-06-26 22:13:36:1336] [[32minfo[39m]: [32mServer listening on http://localhost:3000 in development mode[39m
+[2026-06-26 22:14:35:1435] [[33mwarn[39m]: [33mPOST /api/tasks - 403 client error: CSRF verification failed. Missing or invalid X-CSRF-Token header.[39m
+[2026-06-26 22:15:11:1511] [[33mwarn[39m]: [33mPOST /api/tasks - 403 client error: CSRF verification failed. Missing or invalid X-CSRF-Token header.[39m
+[2026-06-26 22:15:49:1549] [[33mwarn[39m]: [33mPOST /api/tasks - 403 client error: CSRF verification failed. Missing or invalid X-CSRF-Token header.[39m
+[2026-06-26 22:17:13:1713] [[31merror[39m]: [31mPOST /api/tasks - 500 Internal Error: next is not a function[39m
+TypeError: next is not a function
+    at model.<anonymous> (file:///F:/Web%20Development/Task%20Manager/backend/src/models/Task.model.js:124:3)
+    at Kareem.execPre (F:\Web Development\Task Manager\backend\node_modules\kareem\index.js:59:39)
+    at model._execDocumentPreHooks (F:\Web Development\Task Manager\backend\node_modules\mongoose\lib\document.js:3210:29)
+    at model.$__save (F:\Web Development\Task Manager\backend\node_modules\mongoose\lib\model.js:403:16)
+    at process.processTicksAndRejections (node:internal/process/task_queues:105:5)
+    at async maybeTracedSave (F:\Web Development\Task Manager\backend\node_modules\mongoose\lib\model.js:675:7)
+    at async Function.create (F:\Web Development\Task Manager\backend\node_modules\mongoose\lib\model.js:2763:5)
+    at async TaskService.createTask (file:///F:/Web%20Development/Task%20Manager/backend/src/services/task.service.js:10:18)
+    at async file:///F:/Web%20Development/Task%20Manager/backend/src/controllers/task.controller.js:10:16
+[2026-06-26 22:17:38:1738] [[32minfo[39m]: [32mMongoDB connected! DB HOST: ac-k0b5ibv-shard-00-01.agxa84l.mongodb.net[39m
+[2026-06-26 22:17:38:1738] [[32minfo[39m]: [32mServer listening on http://localhost:3000 in development mode[39m
+[2026-06-26 22:19:55:1955] [[32minfo[39m]: [32mMongoDB connected! DB HOST: ac-k0b5ibv-shard-00-00.agxa84l.mongodb.net[39m
+[2026-06-26 22:19:55:1955] [[32minfo[39m]: [32mServer listening on http://localhost:3000 in development mode[39m
+[2026-06-26 22:20:06:206] [[32minfo[39m]: [32mMongoDB connected! DB HOST: ac-k0b5ibv-shard-00-01.agxa84l.mongodb.net[39m
+[2026-06-26 22:20:06:206] [[32minfo[39m]: [32mServer listening on http://localhost:3000 in development mode[39m
+[2026-06-26 22:20:21:2021] [[32minfo[39m]: [32mMongoDB connected! DB HOST: ac-k0b5ibv-shard-00-01.agxa84l.mongodb.net[39m
+[2026-06-26 22:20:21:2021] [[32minfo[39m]: [32mServer listening on http://localhost:3000 in development mode[39m
+[2026-06-26 22:24:35:2435] [[32minfo[39m]: [32mMongoDB connected! DB HOST: ac-k0b5ibv-shard-00-00.agxa84l.mongodb.net[39m
+[2026-06-26 22:24:35:2435] [[32minfo[39m]: [32mServer listening on http://localhost:3000 in development mode[39m
+[2026-06-26 22:24:43:2443] [[32minfo[39m]: [32mMongoDB connected! DB HOST: ac-k0b5ibv-shard-00-02.agxa84l.mongodb.net[39m
+[2026-06-26 22:24:52:2452] [[32minfo[39m]: [32mMongoDB connected! DB HOST: ac-k0b5ibv-shard-00-02.agxa84l.mongodb.net[39m
+[2026-06-26 22:24:52:2452] [[32minfo[39m]: [32mServer listening on http://localhost:3000 in development mode[39m
+[2026-06-26 22:25:01:251] [[32minfo[39m]: [32mMongoDB connected! DB HOST: ac-k0b5ibv-shard-00-00.agxa84l.mongodb.net[39m
+[2026-06-26 22:25:23:2523] [[32minfo[39m]: [32mMongoDB connected! DB HOST: ac-k0b5ibv-shard-00-00.agxa84l.mongodb.net[39m
+[2026-06-26 22:25:23:2523] [[32minfo[39m]: [32mServer listening on http://localhost:3000 in development mode[39m
+[2026-06-26 22:25:58:2558] [[32minfo[39m]: [32mMongoDB connected! DB HOST: ac-k0b5ibv-shard-00-02.agxa84l.mongodb.net[39m
+[2026-06-26 22:26:32:2632] [[32minfo[39m]: [32mMongoDB connected! DB HOST: ac-k0b5ibv-shard-00-00.agxa84l.mongodb.net[39m
+[2026-06-26 22:27:38:2738] [[32minfo[39m]: [32mMongoDB connected! DB HOST: ac-k0b5ibv-shard-00-02.agxa84l.mongodb.net[39m
+[2026-06-26 22:29:03:293] [[33mwarn[39m]: [33mGET /api/tasks - 401 client error: Not authorized, access token is missing[39m
+[2026-06-26 22:29:03:293] [[33mwarn[39m]: [33mGET /api/focus/current - 401 client error: Not authorized, access token is missing[39m
+[2026-06-26 22:29:05:295] [[33mwarn[39m]: [33mGET /api/tasks - 401 client error: Not authorized, access token is missing[39m
+[2026-06-26 22:29:05:295] [[33mwarn[39m]: [33mGET /api/focus/current - 401 client error: Not authorized, access token is missing[39m
+[2026-06-26 22:29:05:295] [[33mwarn[39m]: [33mGET /api/analytics/overview - 401 client error: Not authorized, access token is missing[39m
+[2026-06-26 22:29:05:295] [[33mwarn[39m]: [33mGET /api/activities?page=1&limit=12 - 401 client error: Not authorized, access token is missing[39m
+[2026-06-26 22:29:06:296] [[33mwarn[39m]: [33mGET /api/tasks - 401 client error: Not authorized, access token is missing[39m
+[2026-06-26 22:29:10:2910] [[32minfo[39m]: [32mMongoDB connected! DB HOST: ac-k0b5ibv-shard-00-00.agxa84l.mongodb.net[39m
+[2026-06-26 22:29:10:2910] [[32minfo[39m]: [32mServer listening on http://localhost:3000 in development mode[39m
+[2026-06-26 22:29:12:2912] [[33mwarn[39m]: [33mGET /api/tasks - 401 client error: Not authorized, access token is missing[39m
+[2026-06-26 22:29:12:2912] [[33mwarn[39m]: [33mGET /api/analytics/overview - 401 client error: Not authorized, access token is missing[39m
+[2026-06-26 22:29:12:2912] [[33mwarn[39m]: [33mGET /api/activities?page=1&limit=12 - 401 client error: Not authorized, access token is missing[39m
+[2026-06-26 22:29:12:2912] [[33mwarn[39m]: [33mGET /api/focus/current - 401 client error: Not authorized, access token is missing[39m
+[2026-06-26 22:29:24:2924] [[33mwarn[39m]: [33mGET /api/auth/me - 401 client error: Not authorized, access token is missing[39m
+[2026-06-26 22:29:39:2939] [[32minfo[39m]: [32mMongoDB connected! DB HOST: ac-k0b5ibv-shard-00-02.agxa84l.mongodb.net[39m
+[2026-06-26 22:29:46:2946] [[32minfo[39m]: [32mMongoDB connected! DB HOST: ac-k0b5ibv-shard-00-02.agxa84l.mongodb.net[39m
+[2026-06-26 22:29:46:2946] [[32minfo[39m]: [32mServer listening on http://localhost:3000 in development mode[39m
+[2026-06-26 22:29:56:2956] [[32minfo[39m]: [32mMongoDB connected! DB HOST: ac-k0b5ibv-shard-00-01.agxa84l.mongodb.net[39m
+[2026-06-26 22:30:07:307] [[32minfo[39m]: [32mMongoDB connected! DB HOST: ac-k0b5ibv-shard-00-00.agxa84l.mongodb.net[39m
+[2026-06-26 22:30:07:307] [[32minfo[39m]: [32mServer listening on http://localhost:3000 in development mode[39m
+[2026-06-26 22:30:27:3027] [[33mwarn[39m]: [33mGET /api/auth/me - 401 client error: Not authorized, access token invalid or expired[39m
+[2026-06-26 22:33:08:338] [[32minfo[39m]: [32mMongoDB connected! DB HOST: ac-k0b5ibv-shard-00-01.agxa84l.mongodb.net[39m
+[2026-06-26 22:33:21:3321] [[32minfo[39m]: [32mMongoDB connected! DB HOST: ac-k0b5ibv-shard-00-01.agxa84l.mongodb.net[39m
+[2026-06-26 22:33:21:3321] [[32minfo[39m]: [32mServer listening on http://localhost:3000 in development mode[39m
+[2026-06-26 22:33:40:3340] [[32minfo[39m]: [32mMongoDB connected! DB HOST: ac-k0b5ibv-shard-00-02.agxa84l.mongodb.net[39m
+[2026-06-26 22:33:40:3340] [[32minfo[39m]: [32mServer listening on http://localhost:3000 in development mode[39m
+[2026-06-26 22:33:52:3352] [[33mwarn[39m]: [33mGET /api/tasks - 401 client error: Not authorized, access token is missing[39m
+[2026-06-26 22:34:08:348] [[32minfo[39m]: [32mMongoDB connected! DB HOST: ac-k0b5ibv-shard-00-02.agxa84l.mongodb.net[39m
+[2026-06-26 22:34:08:348] [[32minfo[39m]: [32mServer listening on http://localhost:3000 in development mode[39m
+[2026-06-26 22:35:24:3524] [[32minfo[39m]: [32mMongoDB connected! DB HOST: ac-k0b5ibv-shard-00-02.agxa84l.mongodb.net[39m
+[2026-06-26 22:35:24:3524] [[32minfo[39m]: [32mServer listening on http://localhost:3000 in development mode[39m
+[2026-06-26 22:35:32:3532] [[32minfo[39m]: [32mMongoDB connected! DB HOST: ac-k0b5ibv-shard-00-00.agxa84l.mongodb.net[39m
+[2026-06-26 22:35:44:3544] [[32minfo[39m]: [32mMongoDB connected! DB HOST: ac-k0b5ibv-shard-00-01.agxa84l.mongodb.net[39m
+[2026-06-26 22:35:44:3544] [[32minfo[39m]: [32mServer listening on http://localhost:3000 in development mode[39m
+[2026-06-26 22:35:57:3557] [[32minfo[39m]: [32mMongoDB connected! DB HOST: ac-k0b5ibv-shard-00-01.agxa84l.mongodb.net[39m
+[2026-06-26 22:38:02:382] [[33mwarn[39m]: [33mGET /api/auth/me - 401 client error: Not authorized, access token is missing[39m
+[2026-06-26 22:38:09:389] [[33mwarn[39m]: [33mPOST /api/auth/login - 401 client error: Invalid email or password[39m
+[2026-06-26 22:38:32:3832] [[32minfo[39m]: [32mMongoDB connected! DB HOST: ac-k0b5ibv-shard-00-02.agxa84l.mongodb.net[39m
+[2026-06-26 22:38:32:3832] [[32minfo[39m]: [32mServer listening on http://localhost:3000 in development mode[39m
+[2026-06-26 22:38:41:3841] [[32minfo[39m]: [32mMongoDB connected! DB HOST: ac-k0b5ibv-shard-00-01.agxa84l.mongodb.net[39m
+[2026-06-26 22:38:41:3841] [[32minfo[39m]: [32mServer listening on http://localhost:3000 in development mode[39m
+[2026-06-26 22:38:47:3847] [[32minfo[39m]: [32mMongoDB connected! DB HOST: ac-k0b5ibv-shard-00-00.agxa84l.mongodb.net[39m
+[2026-06-26 22:38:47:3847] [[32minfo[39m]: [32mServer listening on http://localhost:3000 in development mode[39m
+[2026-06-26 22:38:54:3854] [[32minfo[39m]: [32mMongoDB connected! DB HOST: ac-k0b5ibv-shard-00-01.agxa84l.mongodb.net[39m
+[2026-06-26 22:39:04:394] [[32minfo[39m]: [32mMongoDB connected! DB HOST: ac-k0b5ibv-shard-00-00.agxa84l.mongodb.net[39m
+[2026-06-26 22:39:04:394] [[32minfo[39m]: [32mServer listening on http://localhost:3000 in development mode[39m
+[2026-06-26 22:39:37:3937] [[32minfo[39m]: [32mReceived SIGINT. Starting graceful shutdown...[39m

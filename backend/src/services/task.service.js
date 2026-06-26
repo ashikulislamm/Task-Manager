@@ -20,7 +20,7 @@ class TaskService {
    * Get all tasks of the authenticated user with optional filtering/sorting
    */
   async getAllTasks(userId, query = {}) {
-    const { status, priority, category, overdue, sort } = query;
+    const { status, priority, category, overdue, sort, page = 1, limit = 20 } = query;
     const queryObject = { userId };
 
     if (status) {
@@ -41,45 +41,37 @@ class TaskService {
 
     let dbQuery = Task.find(queryObject);
 
-    // Apply sorting in MongoDB
+    // Apply sorting in MongoDB using native indexes
     if (sort === 'dueDate') {
       dbQuery = dbQuery.sort({ dueDate: 1, createdAt: -1 });
     } else if (sort === '-dueDate') {
       dbQuery = dbQuery.sort({ dueDate: -1, createdAt: -1 });
+    } else if (sort === 'priority') {
+      dbQuery = dbQuery.sort({ priorityWeight: 1, createdAt: -1 });
+    } else if (sort === '-priority') {
+      dbQuery = dbQuery.sort({ priorityWeight: -1, createdAt: -1 });
     } else {
       dbQuery = dbQuery.sort({ createdAt: -1 });
     }
 
-    let tasks = await dbQuery.lean();
+    // Apply offset pagination in MongoDB
+    const skip = (Number(page) - 1) * Number(limit);
+    dbQuery = dbQuery.skip(skip).limit(Number(limit));
 
-    // Attach progressPercentage manually since lean() queries bypass schema virtuals
-    tasks = tasks.map(t => {
-      const subtasks = t.subtasks || [];
-      if (subtasks.length === 0) {
-        t.progressPercentage = t.status === 'done' ? 100 : 0;
-      } else {
-        const completedCount = subtasks.filter((s) => s.completed).length;
-        t.progressPercentage = Math.round((completedCount / subtasks.length) * 100);
-      }
-      return t;
-    });
+    const [tasks, totalTasks] = await Promise.all([
+      dbQuery.lean(),
+      Task.countDocuments(queryObject),
+    ]);
 
-    // Custom sort in-memory for priorities
-    if (sort === 'priority' || sort === '-priority') {
-      const priorityWeights = {
-        low: 1,
-        medium: 2,
-        high: 3,
-        critical: 4,
-      };
-      tasks.sort((a, b) => {
-        const weightA = priorityWeights[a.priority] || 2;
-        const weightB = priorityWeights[b.priority] || 2;
-        return sort === 'priority' ? weightA - weightB : weightB - weightA;
-      });
-    }
-
-    return tasks;
+    return {
+      tasks,
+      pagination: {
+        totalTasks,
+        totalPages: Math.ceil(totalTasks / Number(limit)),
+        currentPage: Number(page),
+        limit: Number(limit),
+      },
+    };
   }
 
   /**
@@ -93,14 +85,6 @@ class TaskService {
 
     if (task.userId.toString() !== userId.toString()) {
       throw new ApiError(403, 'Access denied. You do not own this task.');
-    }
-
-    const subtasks = task.subtasks || [];
-    if (subtasks.length === 0) {
-      task.progressPercentage = task.status === 'done' ? 100 : 0;
-    } else {
-      const completedCount = subtasks.filter((s) => s.completed).length;
-      task.progressPercentage = Math.round((completedCount / subtasks.length) * 100);
     }
 
     return task;
@@ -170,6 +154,7 @@ class TaskService {
       'status',
       'priority',
       'dueDate',
+      'dueTime',
       'category',
       'isRecurring',
       'recurrenceType',
@@ -256,6 +241,7 @@ class TaskService {
       priority: task.priority || 'medium',
       category: task.category || 'personal',
       dueDate: nextDueDate,
+      dueTime: task.dueTime,
       isRecurring: true,
       recurrenceType: task.recurrenceType,
       recurrenceEndDate: task.recurrenceEndDate,
@@ -484,8 +470,8 @@ class TaskService {
       });
     }
 
-    if (subtaskUpdateData.dueDate !== undefined && 
-        (subtaskUpdateData.dueDate ? new Date(subtaskUpdateData.dueDate).getTime() : null) !== (oldDueDate ? new Date(oldDueDate).getTime() : null)) {
+    if (subtaskUpdateData.dueDate !== undefined &&
+      (subtaskUpdateData.dueDate ? new Date(subtaskUpdateData.dueDate).getTime() : null) !== (oldDueDate ? new Date(oldDueDate).getTime() : null)) {
       await activityService.logActivity(userId, task._id, 'subtask_due_date_changed', {
         taskTitle: task.title,
         subtaskTitle: updatedSubtask.title,

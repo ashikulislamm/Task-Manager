@@ -8,10 +8,22 @@ const validate = (schema) => (req, res, next) => {
       params: req.params,
     });
 
-    // Assign validated data back to request
-    if (parsed.body) req.body = parsed.body;
-    if (parsed.query) req.query = parsed.query;
-    if (parsed.params) req.params = parsed.params;
+    // Assign validated data back to request (in-place modification for Express 5 compatibility)
+    if (parsed.body) {
+      req.body = parsed.body;
+    }
+    if (parsed.query) {
+      for (const key in req.query) {
+        delete req.query[key];
+      }
+      Object.assign(req.query, parsed.query);
+    }
+    if (parsed.params) {
+      for (const key in req.params) {
+        delete req.params[key];
+      }
+      Object.assign(req.params, parsed.params);
+    }
 
     next();
   } catch (error) {

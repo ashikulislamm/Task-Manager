@@ -16,7 +16,17 @@ export const createTask = asyncHandler(async (req, res) => {
  */
 export const getAllTasks = asyncHandler(async (req, res) => {
   const userId = req.user._id;
-  const tasks = await taskService.getAllTasks(userId, req.query);
+  const { tasks, pagination } = await taskService.getAllTasks(userId, req.query);
+
+  // Set pagination metadata in response headers for backwards compatibility with frontends
+  res.set('X-Pagination-Total', pagination.totalTasks.toString());
+  res.set('X-Pagination-Limit', pagination.limit.toString());
+  res.set('X-Pagination-Page', pagination.currentPage.toString());
+  res.set('X-Pagination-Pages', pagination.totalPages.toString());
+  
+  // Expose headers for cross-origin browser requests
+  res.set('Access-Control-Expose-Headers', 'X-Pagination-Total, X-Pagination-Limit, X-Pagination-Page, X-Pagination-Pages');
+
   res.status(200).json(new ApiResponse(200, 'Tasks retrieved successfully', tasks));
 });
 
@@ -78,8 +88,7 @@ export const addSubtask = asyncHandler(async (req, res) => {
   const { taskId } = req.params;
   const userId = req.user._id;
   const task = await taskService.addSubtask(taskId, req.body, userId);
-  const taskWithProgress = await taskService.getTaskById(task._id, userId);
-  res.status(201).json(new ApiResponse(201, 'Subtask added successfully', taskWithProgress));
+  res.status(201).json(new ApiResponse(201, 'Subtask added successfully', task));
 });
 
 /**

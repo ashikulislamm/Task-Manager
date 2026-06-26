@@ -16,15 +16,33 @@ const apiClient = axios.create({
   headers: {
     "Content-Type": "application/json",
   },
+  xsrfCookieName: "csrfToken",
+  xsrfHeaderName: "X-CSRF-Token",
 });
 
-// Request interceptor to attach Bearer token if it exists in localStorage (fallback if cookie is not used)
+// Helper to extract a cookie value by name on the client side
+const getCookie = (name: string): string | undefined => {
+  if (typeof document === "undefined") return undefined;
+  const value = `; ${document.cookie}`;
+  const parts = value.split(`; ${name}=`);
+  if (parts.length === 2) return parts.pop()?.split(";").shift();
+  return undefined;
+};
+
+// Request interceptor to attach Bearer token and CSRF token manually
 apiClient.interceptors.request.use(
   (config) => {
     if (typeof window !== "undefined") {
+      // 1. Attach JWT token (fallback if cookies are not used)
       const token = localStorage.getItem("token");
       if (token) {
         config.headers.Authorization = `Bearer ${token}`;
+      }
+
+      // 2. Attach CSRF token (bypasses Axios cross-origin / cross-port safeguard)
+      const csrfToken = getCookie("csrfToken");
+      if (csrfToken) {
+        config.headers["X-CSRF-Token"] = csrfToken;
       }
     }
     return config;

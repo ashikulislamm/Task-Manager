@@ -1,7 +1,11 @@
+import mongoose from 'mongoose';
 import User from '../models/User.model.js';
 import Task from '../models/Task.model.js';
+import Activity from '../models/Activity.model.js';
+import FocusSession from '../models/FocusSession.model.js';
 import ApiError from '../utils/ApiError.js';
-import generateToken from '../utils/generateToken.js';
+import { generateAccessToken, generateRefreshToken } from '../utils/generateToken.js';
+import jwt from 'jsonwebtoken';
 
 class AuthService {
   /**
@@ -14,13 +18,14 @@ class AuthService {
     }
 
     const user = await User.create({ name, email, password });
-    const token = generateToken(user._id);
+    const accessToken = generateAccessToken(user._id);
+    const refreshToken = generateRefreshToken(user._id);
 
-    return { user, token };
+    return { user, accessToken, refreshToken };
   }
 
   /**
-   * Login user and return user info + token
+   * Login user and return user info + tokens
    */
   async login({ email, password }) {
     const user = await User.findOne({ email });
@@ -33,9 +38,32 @@ class AuthService {
       throw new ApiError(401, 'Invalid email or password');
     }
 
-    const token = generateToken(user._id);
+    const accessToken = generateAccessToken(user._id);
+    const refreshToken = generateRefreshToken(user._id);
 
-    return { user, token };
+    return { user, accessToken, refreshToken };
+  }
+
+  /**
+   * Verify refresh token and generate a new access token
+   */
+  async refreshSession(refreshToken) {
+    if (!refreshToken) {
+      throw new ApiError(401, 'Refresh token is missing');
+    }
+
+    try {
+      const decoded = jwt.verify(refreshToken, process.env.JWT_SECRET);
+      const user = await User.findById(decoded.id).select('-password').lean();
+      if (!user) {
+        throw new ApiError(401, 'Invalid session, user not found');
+      }
+
+      const newAccessToken = generateAccessToken(user._id);
+      return { accessToken: newAccessToken, user };
+    } catch (err) {
+      throw new ApiError(401, 'Refresh token invalid or expired');
+    }
   }
 
   /**
@@ -96,21 +124,31 @@ class AuthService {
   }
 
   /**
-   * Delete user account and all tasks belonging to them
+   * Delete user account and all related records inside a transaction
    */
   async deleteAccount(userId) {
-    const user = await User.findById(userId);
-    if (!user) {
-      throw new ApiError(404, 'User not found');
+    const session = await mongoose.startSession();
+    session.startTransaction();
+    try {
+      const user = await User.findById(userId).session(session);
+      if (!user) {
+        throw new ApiError(404, 'User not found');
+      }
+
+      // Delete all related records in a transaction to ensure atomicity
+      await Task.deleteMany({ userId }).session(session);
+      await Activity.deleteMany({ userId }).session(session);
+      await FocusSession.deleteMany({ userId }).session(session);
+      await User.findByIdAndDelete(userId).session(session);
+
+      await session.commitTransaction();
+      session.endSession();
+      return { success: true };
+    } catch (error) {
+      await session.abortTransaction();
+      session.endSession();
+      throw error;
     }
-
-    // Delete all user's tasks
-    await Task.deleteMany({ userId });
-
-    // Delete user
-    await User.findByIdAndDelete(userId);
-
-    return { success: true };
   }
 }
 

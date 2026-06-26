@@ -17,6 +17,7 @@ export interface Task {
   status: "todo" | "in-progress" | "done";
   priority: "low" | "medium" | "high" | "critical";
   dueDate?: string | null;
+  dueTime?: string | null;
   category: "work" | "personal" | "study" | "health";
   logs?: { _id: string; content: string; createdAt: string }[];
   subtasks?: Subtask[];
@@ -55,6 +56,7 @@ export const taskService = {
     status?: string;
     priority?: string;
     dueDate?: string | null;
+    dueTime?: string | null;
     category?: string;
     isRecurring?: boolean;
     recurrenceType?: string | null;

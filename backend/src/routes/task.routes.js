@@ -23,6 +23,7 @@ import {
   addSubtaskSchema,
   updateSubtaskSchema,
   subtaskParamsSchema,
+  tasksQuerySchema,
 } from '../validators/task.validation.js';
 
 const router = Router();
@@ -32,7 +33,7 @@ router.use(protect);
 
 router
   .route('/')
-  .get(getAllTasks)
+  .get(validate(tasksQuerySchema), getAllTasks)
   .post(validate(createTaskSchema), createTask);
 
 router
@@ -48,7 +49,7 @@ router.delete('/:taskId/logs/:logId', validate(deleteLogSchema), deleteTaskLog);
 
 // Dedicated endpoints for subtasks
 router.post('/:taskId/subtasks', validate(addSubtaskSchema), addSubtask);
-router.patch('/:taskId/subtasks/:subtaskId', validate(subtaskParamsSchema), validate(updateSubtaskSchema), updateSubtask);
+router.patch('/:taskId/subtasks/:subtaskId', validate(updateSubtaskSchema), updateSubtask); // Cleaned redundant validator
 router.delete('/:taskId/subtasks/:subtaskId', validate(subtaskParamsSchema), deleteSubtask);
 router.patch('/:taskId/subtasks/:subtaskId/toggle', validate(subtaskParamsSchema), toggleSubtask);
 

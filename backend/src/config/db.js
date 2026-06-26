@@ -1,4 +1,5 @@
 import mongoose from 'mongoose';
+import logger from '../utils/logger.js';
 
 const connectDB = async () => {
   try {
@@ -7,9 +8,9 @@ const connectDB = async () => {
       throw new Error('MONGODB_URI environment variable is not defined');
     }
     const connectionInstance = await mongoose.connect(mongodbUri);
-    console.log(`MongoDB connected! DB HOST: ${connectionInstance.connection.host}`);
+    logger.info(`MongoDB connected! DB HOST: ${connectionInstance.connection.host}`);
   } catch (error) {
-    console.error('MongoDB connection FAILED: ', error);
+    logger.error('MongoDB connection FAILED: ', error);
     process.exit(1);
   }
 };

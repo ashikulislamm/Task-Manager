@@ -26,6 +26,10 @@ const taskSchema = new mongoose.Schema(
     dueDate: {
       type: Date,
     },
+    dueTime: {
+      type: String,
+      trim: true,
+    },
     category: {
       type: String,
       enum: ['work', 'personal', 'study', 'health'],
@@ -88,28 +92,46 @@ const taskSchema = new mongoose.Schema(
         },
       },
     ],
+    progressPercentage: {
+      type: Number,
+      default: 0,
+    },
+    priorityWeight: {
+      type: Number,
+      default: 2, // Default to medium priority weight (2)
+    },
   },
   {
     timestamps: true,
-    toJSON: { virtuals: true },
-    toObject: { virtuals: true },
   }
 );
 
-// Virtual property for automatic progress tracking
-taskSchema.virtual('progressPercentage').get(function () {
+// Pre-save hook to automatically calculate progressPercentage and priorityWeight
+taskSchema.pre('save', function () {
+  // 1. Calculate progressPercentage
   if (!this.subtasks || this.subtasks.length === 0) {
-    return this.status === 'done' ? 100 : 0;
+    this.progressPercentage = this.status === 'done' ? 100 : 0;
+  } else {
+    const completedCount = this.subtasks.filter((s) => s.completed).length;
+    this.progressPercentage = Math.round((completedCount / this.subtasks.length) * 100);
   }
-  const completedCount = this.subtasks.filter((s) => s.completed).length;
-  return Math.round((completedCount / this.subtasks.length) * 100);
+
+  // 2. Map priority string to priorityWeight number for DB sorting
+  const priorityWeights = {
+    low: 1,
+    medium: 2,
+    high: 3,
+    critical: 4,
+  };
+  this.priorityWeight = priorityWeights[this.priority] || 2;
 });
 
 // Indexes for query performance
 taskSchema.index({ userId: 1, status: 1 });
-taskSchema.index({ userId: 1, priority: 1 });
+taskSchema.index({ userId: 1, priorityWeight: -1 }); // Index for sorting by priority descending
 taskSchema.index({ userId: 1, category: 1 });
 taskSchema.index({ userId: 1, dueDate: 1 });
+taskSchema.index({ userId: 1, isRecurring: 1 }); // Index for checking recurring tasks
 
 const Task = mongoose.model('Task', taskSchema);
 
