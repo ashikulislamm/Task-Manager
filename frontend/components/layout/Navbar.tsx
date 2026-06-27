@@ -6,6 +6,7 @@ import { Menu, X, ArrowLeft } from "lucide-react";
 import { Button } from "../shared/Button";
 import { useAuth } from "../../context/AuthContext";
 import { motion, AnimatePresence } from "framer-motion";
+import { Logo } from "../shared/Logo";
 
 interface NavbarProps {
   minimal?: boolean; // If true, shows the simplified "Back to Home" navbar
@@ -19,11 +20,8 @@ export const Navbar: React.FC<NavbarProps> = ({ minimal = false }) => {
     <header className="sticky top-0 z-40 w-full border-b border-border-custom bg-white/85 backdrop-blur-md shrink-0 select-none">
       <div className="max-w-7xl mx-auto px-6 h-16 flex items-center justify-between">
         {/* Logo */}
-        <Link href="/" className="flex items-center gap-2 select-none group">
-          <div className="w-5.5 h-5.5 rounded bg-foreground flex items-center justify-center font-bold text-xs text-background">
-            P
-          </div>
-          <span className="font-semibold text-sm tracking-tight text-foreground">Planora</span>
+        <Link href="/" className="flex items-center select-none group">
+          <Logo size="md" />
         </Link>
 
         {minimal ? (
@@ -37,8 +35,14 @@ export const Navbar: React.FC<NavbarProps> = ({ minimal = false }) => {
           <>
             {/* Desktop Navigation */}
             <nav className="hidden md:flex items-center gap-8 text-xs font-semibold text-secondary-text uppercase tracking-wider">
-              <a href="#features" className="hover:text-foreground transition-colors">Features</a>
-              <a href="#about" className="hover:text-foreground transition-colors">About</a>
+              <a href="#features" className="relative py-1 hover:text-foreground transition-colors group/navlink">
+                Features
+                <span className="absolute bottom-0 left-0 w-0 h-[1.5px] bg-foreground transition-all duration-300 group-hover/navlink:w-full" />
+              </a>
+              <a href="#about" className="relative py-1 hover:text-foreground transition-colors group/navlink">
+                About
+                <span className="absolute bottom-0 left-0 w-0 h-[1.5px] bg-foreground transition-all duration-300 group-hover/navlink:w-full" />
+              </a>
             </nav>
 
             {/* Desktop Auth Buttons */}

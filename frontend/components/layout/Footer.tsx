@@ -2,6 +2,7 @@
 
 import React from "react";
 import Link from "next/link";
+import { Logo } from "../shared/Logo";
 
 interface FooterProps {
   minimal?: boolean; // If true, matches the simplified login/register footer
@@ -13,13 +14,8 @@ export const Footer: React.FC<FooterProps> = ({ minimal = false }) => {
       <div className="max-w-7xl mx-auto flex flex-col sm:flex-row items-center justify-between gap-6">
         {/* Left trademark */}
         <div className="flex flex-col items-center sm:items-start gap-1">
-          <div className="flex items-center gap-2 select-none">
-            <div className="w-5 h-5 rounded bg-foreground flex items-center justify-center font-bold text-xs text-background">
-              P
-            </div>
-            <span className="font-semibold text-foreground text-sm leading-none">Planora</span>
-          </div>
-          <p className="text-xs text-secondary-text mt-1">
+          <Logo size="sm" />
+          <p className="text-xs text-secondary-text mt-2">
             © {new Date().getFullYear()} Planora Inc. All rights reserved.
           </p>
         </div>
